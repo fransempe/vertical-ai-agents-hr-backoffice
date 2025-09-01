@@ -1,36 +1,214 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# HR Interview Backoffice
 
-## Getting Started
+A modern HR backoffice system for managing AI-powered interview meetings. Built with Next.js 15, TypeScript, and Supabase.
 
-First, run the development server:
+## Features
+
+- 🤖 **AI Agent Management**: Create and manage AI agents for conducting interviews
+- 👥 **Candidate Management**: Manage candidate information and profiles
+- 📅 **Meeting Orchestration**: Create interview meetings with unique tokens and links
+- 🔗 **Secure Access**: Token-based meeting access with UUID security
+- 🗃️ **Modular Database**: Configurable database provider (currently Supabase, easily extensible)
+- 🎨 **Modern UI**: Built with Tailwind CSS and custom components
+
+## Tech Stack
+
+- **Framework**: Next.js 15 with App Router
+- **Language**: TypeScript
+- **Database**: Supabase (PostgreSQL)
+- **Styling**: Tailwind CSS
+- **Components**: Custom UI components
+- **UUID Generation**: Built-in UUID v4 support
+
+## Database Schema
+
+### Tables
+
+1. **candidates**
+   - `id` (UUID, Primary Key)
+   - `name` (VARCHAR, Required)
+   - `email` (VARCHAR, Required, Unique)
+   - `phone` (VARCHAR, Optional)
+   - `created_at` / `updated_at` (Timestamps)
+
+2. **meets**
+   - `id` (UUID, Primary Key)
+   - `candidate_id` (UUID, Foreign Key)
+   - `agent_id` (UUID, Foreign Key)
+   - `token` (UUID, Unique)
+   - `link` (TEXT, Generated)
+   - `status` (ENUM: pending, active, completed, cancelled)
+   - `scheduled_at` (Timestamp, Optional)
+   - `created_at` / `updated_at` (Timestamps)
+
+3. 
+
+## Setup Instructions
+
+### 1. Install Dependencies
+
+```bash
+cd hr-backoffice
+npm install
+```
+
+### 2. Set Up Supabase
+
+1. Create a new Supabase project at [supabase.com](https://supabase.com)
+2. Go to Settings > API to get your project URL and anon key
+3. Execute the SQL schema in `database/supabase-schema.sql` in your Supabase SQL editor
+
+### 3. Configure Environment Variables
+
+Copy the example environment file:
+
+```bash
+cp .env.local.example .env.local
+```
+
+Update `.env.local` with your Supabase credentials:
+
+```env
+# Database Configuration
+DATABASE_PROVIDER=supabase
+
+# Supabase Configuration
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Application Configuration
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+```
+
+### 4. Run the Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The application will be available at [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Usage
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Managing AI Agents
 
-## Learn More
+1. Navigate to the "AI Agents" tab
+2. Fill in the agent name and description
+3. Click "Create Agent" to add a new AI interviewer
 
-To learn more about Next.js, take a look at the following resources:
+### Managing Candidates
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Navigate to the "Candidates" tab  
+2. Enter candidate information (name, email, phone)
+3. Click "Create Candidate" to add them to the system
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Creating Interview Meetings
 
-## Deploy on Vercel
+1. Navigate to the "Meetings" tab
+2. Select a candidate and AI agent from the dropdowns
+3. Click "Create Meeting" to generate a new interview session
+4. The system will automatically:
+   - Generate a unique UUID for the meeting
+   - Create a secure token for access
+   - Generate a meeting link: `http://your-domain/meet/{token}`
+   - Store all information in the database
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Accessing Meetings
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Candidates can access their interviews using the generated link format:
+```
+http://your-domain/meet/{token}
+```
+
+The meeting page will display:
+- Meeting status (pending, active, completed, cancelled)
+- Candidate and agent information
+- Meeting details
+- Appropriate actions based on status
+
+### Deleting Meetings
+
+Meetings can be deleted from the backoffice by clicking the "Delete" button next to any meeting in the list.
+
+## API Routes
+
+The application provides the following REST API endpoints:
+
+### AI Agents
+- `GET /api/agents` - List all agents
+- `POST /api/agents` - Create new agent
+- `GET /api/agents/[id]` - Get specific agent
+- `PUT /api/agents/[id]` - Update agent
+- `DELETE /api/agents/[id]` - Delete agent
+
+### Candidates
+- `GET /api/candidates` - List all candidates
+- `POST /api/candidates` - Create new candidate
+- `GET /api/candidates/[id]` - Get specific candidate
+- `PUT /api/candidates/[id]` - Update candidate
+- `DELETE /api/candidates/[id]` - Delete candidate
+
+### Meetings
+- `GET /api/meets` - List all meetings
+- `POST /api/meets` - Create new meeting
+- `GET /api/meets/[id]` - Get specific meeting
+- `PUT /api/meets/[id]` - Update meeting
+- `DELETE /api/meets/[id]` - Delete meeting
+- `GET /api/meets/token/[token]` - Get meeting by token
+
+## Database Provider Architecture
+
+The system is designed with a modular database architecture that allows easy switching between providers:
+
+### Current Provider: Supabase
+- Full PostgreSQL database
+- Real-time capabilities
+- Built-in authentication (ready for future use)
+- Automatic backups
+
+### Adding New Providers
+
+To add a new database provider:
+
+1. Create a new file in `src/lib/database/` (e.g., `mongodb.ts`)
+2. Implement the `DatabaseProvider` interface from `types.ts`
+3. Update the `createDatabaseProvider` function in `src/lib/database/index.ts`
+4. Add necessary environment variables
+
+Example structure:
+```typescript
+export class MongoDBProvider implements DatabaseProvider {
+  // Implement all methods from DatabaseProvider interface
+}
+```
+
+## Security Features
+
+- **UUID-based IDs**: All primary keys use UUID v4 for security
+- **Unique Tokens**: Each meeting has a unique access token
+- **Input Validation**: Server-side validation for all API endpoints
+- **Environment Variables**: Sensitive data stored in environment variables
+- **CORS Protection**: Built-in Next.js API route protection
+
+## Future Enhancements
+
+- [ ] Authentication and authorization
+- [ ] Real-time meeting status updates
+- [ ] Email notifications for candidates
+- [ ] Meeting scheduling with calendar integration
+- [ ] Interview recording and transcription
+- [ ] Analytics and reporting dashboard
+- [ ] Multi-tenant support
+- [ ] Advanced AI agent configuration
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+This project is licensed under the MIT License.
