@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Toast } from '@/components/ui/toast';
 import { Candidate, Meet } from '@/lib/database/types';
 
 export default function Home() {
@@ -12,8 +13,9 @@ export default function Home() {
   const [meetForm, setMeetForm] = useState({ candidate_id: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, createCandidate: false, createMeet: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, createCandidate: false, createMeet: false, sendEmail: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -116,6 +118,46 @@ export default function Home() {
       setTimeout(() => setCopySuccess(null), 2000);
     } catch (error) {
       console.error('Failed to copy link:', error);
+    }
+  };
+
+  const handleSendLink = async (meet: Meet) => {
+    setLoading(prev => ({ ...prev, sendEmail: true }));
+    try {
+      // Find the candidate for this meet
+      const candidate = candidates.find(c => c.id === meet.candidate_id);
+      
+      if (!candidate) {
+        setToast({ message: 'Candidate not found', type: 'error' });
+        return;
+      }
+
+      const emailData = {
+        to_email: candidate.email,
+        subject: `Your Interview Link - ${candidate.name}`,
+        body: `Hi ${candidate.name},\n\nYour interview has been scheduled. Please use the following link to join:\n\n${meet.link}\n\nPassword: ${meet.password}\n\nBest regards,\nHR Team`
+      };
+
+      const response = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(emailData),
+      });
+
+      const result = await response.json();
+
+      if (response.ok) {
+        setToast({ message: `Email sent successfully to ${candidate.email}`, type: 'success' });
+      } else {
+        setToast({ message: result.error || 'Failed to send email', type: 'error' });
+      }
+    } catch (error) {
+      console.error('Error sending email:', error);
+      setToast({ message: 'Failed to send email', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, sendEmail: false }));
     }
   };
 
@@ -382,10 +424,18 @@ export default function Home() {
                           <Button 
                             variant="secondary" 
                             size="sm"
-                            onClick={() => alert(`Interview link sent to candidate: ${meet.link}`)}
-                            className="flex-1 hover:scale-[1.02] transition-transform"
+                            onClick={() => handleSendLink(meet)}
+                            disabled={loading.sendEmail}
+                            className="flex-1 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            📧 Send Link
+                            {loading.sendEmail ? (
+                              <div className="flex items-center gap-1">
+                                <div className="loading-spinner w-3 h-3"></div>
+                                Sending...
+                              </div>
+                            ) : (
+                              <>📧 Send Link</>
+                            )}
                           </Button>
                           <Button 
                             variant="outline" 
@@ -403,6 +453,14 @@ export default function Home() {
               </div>
             </div>
           </div>
+        )}
+        
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
         )}
       </div>
     </div>
