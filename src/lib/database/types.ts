@@ -18,6 +18,10 @@ export interface Meet {
   scheduled_at?: string;
   created_at: string;
   updated_at: string;
+  candidate?: {
+    name: string;
+    email: string;
+  };
 }
 
 export interface Conversation {

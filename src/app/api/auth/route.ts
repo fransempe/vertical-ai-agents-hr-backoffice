@@ -35,6 +35,25 @@ export async function POST(request: NextRequest) {
         { status: 404, headers: corsHeaders }
       );
     }
+    // Validate meet status
+    if (meet.status === 'completed') {
+      return NextResponse.json(
+        { error: 'This interview has already been completed' }, 
+        { status: 400, headers: corsHeaders }
+      );
+    }
+    if (meet.status === 'active') {
+      return NextResponse.json(
+        { error: 'This interview is currently in progress' }, 
+        { status: 400, headers: corsHeaders }
+      );
+    }
+    if (meet.status === 'cancelled') {
+      return NextResponse.json(
+        { error: 'This interview has been cancelled' }, 
+        { status: 400, headers: corsHeaders }
+      );
+    }
 
     // Get candidate information
     const candidate = await db.getCandidate(meet.candidate_id);
@@ -44,7 +63,6 @@ export async function POST(request: NextRequest) {
         { status: 404, headers: corsHeaders }
       );
     }
-
     // Verify email matches the candidate's email
     if (candidate.email.toLowerCase() !== email.toLowerCase()) {
       return NextResponse.json(
@@ -52,7 +70,6 @@ export async function POST(request: NextRequest) {
         { status: 401, headers: corsHeaders }
       );
     }
-
     // Verify password (direct comparison since password is stored in plain text)
     if (password !== meet.password) {
       return NextResponse.json(
@@ -83,7 +100,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Error authenticating meet:', error);
     return NextResponse.json(
-      { error: 'Authentication failed' }, 
+      { error: error instanceof Error ? error.message : 'Authentication failed' }, 
       { status: 500, headers: corsHeaders }
     );
   }

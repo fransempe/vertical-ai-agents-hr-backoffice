@@ -16,10 +16,11 @@ export async function OPTIONS() {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const conversation = await db.getConversation(params.id);
+    const { id } = await params;
+    const conversation = await db.getConversation(id);
     
     if (!conversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404, headers: corsHeaders });
@@ -34,9 +35,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await request.json();
     const { conversation_data } = body;
 
@@ -47,12 +49,12 @@ export async function PUT(
     }
 
     // Check if conversation exists
-    const existingConversation = await db.getConversation(params.id);
+    const existingConversation = await db.getConversation(id);
     if (!existingConversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404, headers: corsHeaders });
     }
 
-    const updatedConversation = await db.updateConversation(params.id, {
+    const updatedConversation = await db.updateConversation(id, {
       conversation_data,
     });
 
@@ -65,16 +67,17 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     // Check if conversation exists
-    const existingConversation = await db.getConversation(params.id);
+    const existingConversation = await db.getConversation(id);
     if (!existingConversation) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404, headers: corsHeaders });
     }
 
-    const success = await db.deleteConversation(params.id);
+    const success = await db.deleteConversation(id);
     
     if (!success) {
       return NextResponse.json({ error: 'Failed to delete conversation' }, { status: 500, headers: corsHeaders });
