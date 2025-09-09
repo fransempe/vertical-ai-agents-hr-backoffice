@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
 import { Candidate, Meet, Conversation } from '@/lib/database/types';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload'>('candidates');
@@ -235,65 +236,8 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-      <div className="container mx-auto p-4 sm:p-6 max-w-6xl">
-        <div className="text-center mb-8 sm:mb-12">
-          <h1 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-4">
-            HR Interview Backoffice
-          </h1>
-          <p className="text-muted-foreground text-base sm:text-lg px-4">
-            Manage candidates and schedule interviews efficiently
-          </p>
-        </div>
-      
-        <div className="flex justify-center mb-8 sm:mb-12">
-          <div className="inline-flex p-1 bg-white/50 backdrop-blur-sm border border-white/20 rounded-xl shadow-lg dark:bg-slate-800/50 dark:border-slate-700/50">
-            <button
-              onClick={() => setActiveTab('candidates')}
-              className={`px-4 sm:px-6 py-3 rounded-lg font-medium transition-all duration-200 text-sm sm:text-base ${
-                activeTab === 'candidates'
-                  ? 'bg-white text-blue-600 shadow-md dark:bg-slate-700 dark:text-blue-400'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50'
-              }`}
-            >
-              <span className="hidden sm:inline">👥 Candidates</span>
-              <span className="sm:hidden">👥</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('meets')}
-              className={`px-4 sm:px-6 py-3 rounded-lg font-medium transition-all duration-200 text-sm sm:text-base ${
-                activeTab === 'meets'
-                  ? 'bg-white text-blue-600 shadow-md dark:bg-slate-700 dark:text-blue-400'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50'
-              }`}
-            >
-              <span className="hidden sm:inline">📅 Interviews</span>
-              <span className="sm:hidden">📅</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('conversations')}
-              className={`px-4 sm:px-6 py-3 rounded-lg font-medium transition-all duration-200 text-sm sm:text-base ${
-                activeTab === 'conversations'
-                  ? 'bg-white text-blue-600 shadow-md dark:bg-slate-700 dark:text-blue-400'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50'
-              }`}
-            >
-              <span className="hidden sm:inline">💬 Conversations</span>
-              <span className="sm:hidden">💬</span>
-            </button>
-            <button
-              onClick={() => setActiveTab('bulk-upload')}
-              className={`px-4 sm:px-6 py-3 rounded-lg font-medium transition-all duration-200 text-sm sm:text-base ${
-                activeTab === 'bulk-upload'
-                  ? 'bg-white text-blue-600 shadow-md dark:bg-slate-700 dark:text-blue-400'
-                  : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:bg-slate-700/50'
-              }`}
-            >
-              <span className="hidden sm:inline">📂 Bulk Upload</span>
-              <span className="sm:hidden">📂</span>
-            </button>
-          </div>
-        </div>
+    <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
+      <div>
 
 
         {activeTab === 'candidates' && (
@@ -827,15 +771,15 @@ export default function Home() {
             </div>
           </div>
         )}
-        
-        {toast && (
-          <Toast
-            message={toast.message}
-            type={toast.type}
-            onClose={() => setToast(null)}
-          />
-        )}
+      
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
       </div>
-    </div>
+    </DashboardLayout>
   );
 }
