@@ -28,7 +28,7 @@ export interface Conversation {
   id: string;
   meet_id: string;
   candidate_id: string;
-  conversation_data: any;
+  conversation_data: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
