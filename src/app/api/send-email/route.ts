@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const emailSenderUrl = 'http://127.0.0.1:8004';
+    const emailSenderUrl = process.env.EMAIL_SENDER_URL;
     
     if (!emailSenderUrl) {
       return NextResponse.json(
@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const response = await fetch(`${emailSenderUrl}/send-simple-email`, {
+    const response = await fetch(`${emailSenderUrl}/send_via_sendgrid_api`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
