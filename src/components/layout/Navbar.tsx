@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface NavbarProps {
@@ -9,7 +8,6 @@ interface NavbarProps {
 }
 
 export function Navbar({ onMenuClick, title = "HR Interview Dashboard" }: NavbarProps) {
-  const [showNotifications, setShowNotifications] = useState(false);
 
   return (
     <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700 px-4 py-3">

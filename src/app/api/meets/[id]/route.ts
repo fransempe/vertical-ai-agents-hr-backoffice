@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
 
 const VALID_STATUSES = ['pending', 'active', 'completed', 'cancelled'] as const;
-type MeetStatus = typeof VALID_STATUSES[number];
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

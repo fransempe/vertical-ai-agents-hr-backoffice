@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
-import { generateRandomPassword } from '@/lib/utils/password';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
