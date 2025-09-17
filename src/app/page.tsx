@@ -806,114 +806,36 @@ export default function Home() {
         )}
 
         {activeTab === 'processes' && (
-          <div className="animate-in max-w-6xl mx-auto">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-              <div className="card p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-indigo-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm">⚙️</span>
-                  </div>
-                  <h2 className="text-xl font-semibold">AI Analysis Process</h2>
+          <div className="animate-in max-w-4xl mx-auto">
+            <div className="card p-6">
+              <div className="flex items-center gap-2 mb-6">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-indigo-500 rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm">⚙️</span>
                 </div>
-                <div className="space-y-6">
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Process Description</h4>
-                    <p className="text-sm text-slate-600 dark:text-slate-400">
-                      Execute AI analysis on interview data using the multiagent system. 
-                      This process will analyze candidate conversations and provide insights.
-                    </p>
-                  </div>
-                  <Button 
-                    onClick={executeAnalysis}
-                    disabled={loading.analyzeProcess}
-                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading.analyzeProcess ? (
-                      <div className="flex items-center gap-2">
-                        <div className="loading-spinner"></div>
-                        Analyzing...
-                      </div>
-                    ) : (
-                      <>🚀 Execute Analysis</>
-                    )}
-                  </Button>
-                </div>
+                <h2 className="text-xl font-semibold">AI Analysis Process</h2>
               </div>
-              
-              <div className="card p-6">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm">📊</span>
-                  </div>
-                  <h2 className="text-xl font-semibold">Analysis Results</h2>
+              <div className="space-y-6">
+                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Process Description</h4>
+                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                    Execute AI analysis on interview data using the multiagent system. 
+                    This process will analyze candidate conversations and provide insights.
+                  </p>
                 </div>
-                <div className="space-y-4 max-h-96 overflow-y-auto">
-                  {analysisResult ? (
-                    <div className="space-y-4">
-                      <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                        <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">Status</h4>
-                        <p className="text-sm text-green-700 dark:text-green-300">
-                          {analysisResult.status || 'success'}
-                        </p>
-                      </div>
-                      
-                      {analysisResult.message && (
-                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                          <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Message</h4>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {analysisResult.message}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {analysisResult.timestamp && (
-                        <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                          <h4 className="font-medium text-purple-800 dark:text-purple-300 mb-2">Timestamp</h4>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {new Date(analysisResult.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {analysisResult.execution_time && (
-                        <div className="p-4 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                          <h4 className="font-medium text-orange-800 dark:text-orange-300 mb-2">Execution Time</h4>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">
-                            {analysisResult.execution_time}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {analysisResult.results_file && (
-                        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/20 rounded-lg">
-                          <h4 className="font-medium text-indigo-800 dark:text-indigo-300 mb-2">Results File</h4>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 font-mono">
-                            {analysisResult.results_file}
-                          </p>
-                        </div>
-                      )}
-                      
-                      {analysisResult.result?.raw_result && (
-                        <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                          <h4 className="font-medium text-slate-800 dark:text-slate-200 mb-2">Raw Results</h4>
-                          <div className="text-sm text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-700 p-3 rounded overflow-x-auto">
-                            <pre className="whitespace-pre-wrap">
-                              {typeof analysisResult.result.raw_result === 'string' 
-                                ? analysisResult.result.raw_result 
-                                : JSON.stringify(analysisResult.result.raw_result, null, 2)
-                              }
-                            </pre>
-                          </div>
-                        </div>
-                      )}
+                <Button 
+                  onClick={executeAnalysis}
+                  disabled={loading.analyzeProcess}
+                  className="w-full h-12 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading.analyzeProcess ? (
+                    <div className="flex items-center gap-2">
+                      <div className="loading-spinner"></div>
+                      Analyzing...
                     </div>
                   ) : (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <div className="text-4xl mb-2">📊</div>
-                      <p>No analysis results yet. Execute the analysis to see results here.</p>
-                    </div>
+                    <>🚀 Execute Analysis</>
                   )}
-                </div>
+                </Button>
               </div>
             </div>
           </div>
