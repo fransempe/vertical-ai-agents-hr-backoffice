@@ -7,6 +7,9 @@ A modern HR backoffice system for managing AI-powered interview meetings. Built 
 - 🤖 **AI Agent Management**: Create and manage AI agents for conducting interviews
 - 👥 **Candidate Management**: Manage candidate information and profiles
 - 📅 **Meeting Orchestration**: Create interview meetings with unique tokens and links
+- 💬 **Conversation History**: View and analyze interview conversations
+- 📂 **Bulk Upload**: Import multiple candidates via CSV or TXT files
+- ⚙️ **AI Analysis Processes**: Execute multiagent analysis on interview data
 - 🔗 **Secure Access**: Token-based meeting access with UUID security
 - 🗃️ **Modular Database**: Configurable database provider (currently Supabase, easily extensible)
 - 🎨 **Modern UI**: Built with Tailwind CSS and custom components
@@ -76,6 +79,9 @@ DATABASE_PROVIDER=supabase
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 
+# Multiagent Project URL (for AI Analysis)
+MULTIAGENT_PROJECT_URL=http://localhost:8000
+
 # Application Configuration
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
@@ -130,6 +136,25 @@ The meeting page will display:
 
 Meetings can be deleted from the backoffice by clicking the "Delete" button next to any meeting in the list.
 
+### AI Analysis Processes
+
+1. Navigate to the "Processes" tab
+2. Click "Execute Analysis" to run the multiagent analysis
+3. The system will:
+   - Call the multiagent project at the configured URL
+   - Execute the `/analyze` endpoint
+   - Display the results including status, execution time, and raw results
+4. Results are displayed in real-time with detailed information about the analysis
+
+### Bulk Upload Candidates
+
+1. Navigate to the "Bulk Upload" tab
+2. Select a CSV or TXT file containing candidate data
+3. Supported formats:
+   - CSV: `Name,Email,Phone`
+   - TXT: Multiple formats supported (comma-separated, space-separated, angle brackets)
+4. Click "Upload Candidates" to import all candidates at once
+
 ## API Routes
 
 The application provides the following REST API endpoints:
@@ -155,6 +180,9 @@ The application provides the following REST API endpoints:
 - `PUT /api/meets/[id]` - Update meeting
 - `DELETE /api/meets/[id]` - Delete meeting
 - `GET /api/meets/token/[token]` - Get meeting by token
+
+### Processes
+- `POST /api/processes/analyze` - Execute AI analysis process
 
 ## Database Provider Architecture
 

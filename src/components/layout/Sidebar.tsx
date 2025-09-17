@@ -4,8 +4,8 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 
 interface SidebarProps {
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes') => void;
   isCollapsed?: boolean;
   onToggleCollapse?: () => void;
 }
@@ -34,6 +34,12 @@ const menuItems = [
     label: 'Bulk Upload',
     icon: '📂',
     description: 'Import candidates',
+  },
+  {
+    id: 'processes' as const,
+    label: 'Processes',
+    icon: '⚙️',
+    description: 'AI Analysis',
   },
 ];
 

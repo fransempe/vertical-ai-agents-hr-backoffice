@@ -6,8 +6,8 @@ import { Navbar } from './Navbar';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes') => void;
 }
 
 export function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
@@ -35,6 +35,8 @@ export function DashboardLayout({ children, activeTab, onTabChange }: DashboardL
         return 'Interview Conversations';
       case 'bulk-upload':
         return 'Bulk Upload Candidates';
+      case 'processes':
+        return 'AI Analysis Processes';
       default:
         return 'HR Interview Dashboard';
     }
