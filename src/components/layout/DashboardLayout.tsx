@@ -11,7 +11,6 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -64,8 +63,6 @@ export function DashboardLayout({ children, activeTab, onTabChange }: DashboardL
             onTabChange(tab);
             setMobileMenuOpen(false);
           }}
-          isCollapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
         />
       </div>
 
@@ -76,8 +73,8 @@ export function DashboardLayout({ children, activeTab, onTabChange }: DashboardL
           title={getTitleForTab(activeTab)}
         />
         
-        <main className="flex-1 overflow-y-auto">
-          <div className="container mx-auto p-4 sm:p-6 max-w-7xl">
+        <main className="flex-1 overflow-y-auto h-full">
+          <div className="w-full p-4 sm:p-6 min-h-full">
             {children}
           </div>
         </main>

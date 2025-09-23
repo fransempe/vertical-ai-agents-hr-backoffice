@@ -6,6 +6,27 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
 import { Candidate, Meet, Conversation } from '@/lib/database/types';
+import { 
+  RiExternalLinkLine, 
+  RiDeleteBinLine, 
+  RiLinkM,
+  RiUserLine,
+  RiTeamLine,
+  RiClipboardLine,
+  RiMailLine,
+  RiPhoneLine,
+  RiCalendarLine,
+  RiBarChartLine,
+  RiKeyLine,
+  RiCheckLine,
+  RiChat3Line,
+  RiRobotLine,
+  RiRocketLine,
+  RiFolderLine,
+  RiSendPlaneLine,
+  RiArrowRightSLine,
+  RiStarLine
+} from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function Home() {
@@ -324,7 +345,7 @@ export default function Home() {
                       Creating...
                     </div>
                   ) : (
-                    <>✨ Create Candidate</>
+                    <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> Create Candidate</span>
                   )}
                 </Button>
               </form>
@@ -333,7 +354,7 @@ export default function Home() {
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">👥</span>
+                  <RiTeamLine className="text-white text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold">Candidates ({candidates.length})</h2>
               </div>
@@ -345,7 +366,7 @@ export default function Home() {
                   </div>
                 ) : candidates.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <div className="text-4xl mb-2">📋</div>
+                    <div className="text-4xl mb-2"><RiClipboardLine /></div>
                     <p>No candidates yet. Create your first candidate!</p>
                   </div>
                 ) : (
@@ -359,9 +380,9 @@ export default function Home() {
                           <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                             {candidate.name}
                           </h3>
-                          <p className="text-sm text-slate-600 dark:text-slate-400">📧 {candidate.email}</p>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {candidate.email}</p>
                           {candidate.phone && (
-                            <p className="text-sm text-slate-600 dark:text-slate-400">📱 {candidate.phone}</p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiPhoneLine className="w-4 h-4" /> {candidate.phone}</p>
                           )}
                         </div>
                       </div>
@@ -378,7 +399,7 @@ export default function Home() {
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">📅</span>
+                  <RiCalendarLine className="text-white text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold">Schedule Interview</h2>
               </div>
@@ -394,7 +415,7 @@ export default function Home() {
                     <option value="" disabled>Choose a candidate...</option>
                     {candidates.map((candidate) => (
                       <option key={candidate.id} value={candidate.id}>
-                        👤 {candidate.name} - {candidate.email}
+                        <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {candidate.name} - {candidate.email}</span>
                       </option>
                     ))}
                   </select>
@@ -410,7 +431,7 @@ export default function Home() {
                       Scheduling...
                     </div>
                   ) : (
-                    <>🚀 Schedule Interview</>
+                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Schedule Interview</span>
                   )}
                 </Button>
               </form>
@@ -419,7 +440,7 @@ export default function Home() {
             <div className="card p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-orange-400 to-red-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">📋</span>
+                  <RiClipboardLine className="text-white text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold">Scheduled Interviews ({meets.length})</h2>
               </div>
@@ -431,7 +452,7 @@ export default function Home() {
                   </div>
                 ) : meets.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    <div className="text-4xl mb-2">📅</div>
+                    <div className="text-4xl mb-2"><RiCalendarLine /></div>
                     <p>No interviews scheduled yet. Create your first interview!</p>
                   </div>
                 ) : (
@@ -446,23 +467,23 @@ export default function Home() {
                             </h3>
                             {meet.candidate && (
                               <div className="space-y-1 text-sm mb-2">
-                                <p className="text-slate-700 dark:text-slate-300 font-medium">👤 {meet.candidate.name}</p>
+                                <p className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {meet.candidate.name}</p>
                                 <p className="text-slate-600 dark:text-slate-400">📧 {meet.candidate.email}</p>
                               </div>
                             )}
                             <div className="space-y-1 text-sm">
-                              <p className="text-slate-600 dark:text-slate-400">🔑 Token: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded">{meet.token}</code></p>
+                              <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiKeyLine className="w-4 h-4" /> Token: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded">{meet.token}</code></p>
                               <p className="text-slate-600 dark:text-slate-400">
-                                📊 Status: <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                <span className="flex items-center gap-1"><RiBarChartLine className="w-4 h-4" /> Status: <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                   meet.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
                                   meet.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                   'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                }`}>{meet.status}</span>
+                                }`}>{meet.status}</span></span>
                               </p>
                               <p className="text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                🔑 Password: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded font-mono text-slate-900 dark:text-slate-100 font-bold">
+                                <span className="flex items-center gap-1"><RiKeyLine className="w-4 h-4" /> Password: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded font-mono text-slate-900 dark:text-slate-100 font-bold">
                                   {meet.password || 'No password available'}
-                                </code>
+                                </code></span>
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -470,7 +491,7 @@ export default function Home() {
                                   className="hover:scale-105 transition-transform p-1 h-6 w-6"
                                   disabled={!meet.password}
                                 >
-                                  {copySuccess === meet.password ? '✅' : '📋'}
+                                  {copySuccess === meet.password ? <RiCheckLine className="w-4 h-4" /> : <RiClipboardLine className="w-4 h-4" />}
                                 </Button>
                               </p>
                             </div>
@@ -482,10 +503,9 @@ export default function Home() {
                                 rel="noopener noreferrer" 
                                 className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded transition-colors"
                               >
-                                🔗 Join Interview
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                </svg>
+                                <RiLinkM className="w-4 h-4" />
+                                Join Interview
+                                <RiExternalLinkLine className="w-3 h-3" />
                               </a>
                             </div>
                           </div>
@@ -495,7 +515,7 @@ export default function Home() {
                             onClick={() => deleteMeet(meet.id)}
                             className="hover:scale-105 transition-transform"
                           >
-                            🗑️
+                            <RiDeleteBinLine className="w-4 h-4" />
                           </Button>
                         </div>
                         <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-600">
@@ -512,7 +532,7 @@ export default function Home() {
                                 Sending...
                               </div>
                             ) : (
-                              <>📧 Send Link</>
+                              <span className="flex items-center gap-1"><RiSendPlaneLine className="w-4 h-4" /> Send Link</span>
                             )}
                           </Button>
                           <Button 
@@ -521,7 +541,7 @@ export default function Home() {
                             onClick={() => handleCopyLink(meet.link)}
                             className="hover:scale-[1.02] transition-transform"
                           >
-                            {copySuccess === meet.link ? '✅ Copied!' : '📋 Copy'}
+                            {copySuccess === meet.link ? <span className="flex items-center gap-1"><RiCheckLine className="w-4 h-4" /> Copied!</span> : <span className="flex items-center gap-1"><RiClipboardLine className="w-4 h-4" /> Copy</span>}
                           </Button>
                         </div>
                       </div>
@@ -534,17 +554,17 @@ export default function Home() {
         )}
 
         {activeTab === 'conversations' && (
-          <div className="animate-in">
+          <div className="animate-in h-full w-full">
             {!selectedCandidate ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-                <div className="card p-6">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 h-full">
+                <div className="card p-6 h-full flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-sm">💬</span>
+                      <RiChat3Line className="text-white text-sm" />
                     </div>
                     <h2 className="text-xl font-semibold">Candidates with Conversations ({getCandidatesWithConversations().length})</h2>
                   </div>
-                  <div className="space-y-3 max-h-96 overflow-y-auto">
+                  <div className="space-y-3 flex-1 overflow-y-auto">
                     {loading.conversations ? (
                       <div className="text-center py-8">
                         <div className="loading-spinner mx-auto mb-2"></div>
@@ -552,7 +572,7 @@ export default function Home() {
                       </div>
                     ) : getCandidatesWithConversations().length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
-                        <div className="text-4xl mb-2">💬</div>
+                        <div className="text-4xl mb-2"><RiChat3Line /></div>
                         <p>No conversations yet. Candidates will appear here after their interviews.</p>
                       </div>
                     ) : (
@@ -573,15 +593,13 @@ export default function Home() {
                                 <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                                   {candidate.name}
                                 </h3>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">📧 {candidate.email}</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {candidate.email}</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                                  💬 {candidateConversations.length} conversation{candidateConversations.length !== 1 ? 's' : ''}
+                                  <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {candidateConversations.length} conversation{candidateConversations.length !== 1 ? 's' : ''}</span>
                                 </p>
                               </div>
                               <div className="text-purple-400 group-hover:text-purple-600 transition-colors">
-                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                </svg>
+                                <RiArrowRightSLine className="w-5 h-5" />
                               </div>
                             </div>
                           </div>
@@ -591,14 +609,14 @@ export default function Home() {
                   </div>
                 </div>
                 
-                <div className="card p-6">
+                <div className="card p-6 h-full flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm">ℹ️</span>
                     </div>
                     <h2 className="text-xl font-semibold">Instructions</h2>
                   </div>
-                  <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
+                  <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400 flex-1 overflow-y-auto">
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                       <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">How to view conversations:</h4>
                       <ol className="list-decimal list-inside space-y-1">
@@ -619,8 +637,8 @@ export default function Home() {
                 </div>
               </div>
             ) : (
-              <div className="max-w-4xl mx-auto">
-                <div className="card p-6">
+              <div className="w-full">
+                <div className="card p-6 h-full flex flex-col">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
                       <Button
@@ -640,11 +658,11 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                      💬 {getCandidateConversations(selectedCandidate.id).length} conversation{getCandidateConversations(selectedCandidate.id).length !== 1 ? 's' : ''}
+                      <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {getCandidateConversations(selectedCandidate.id).length} conversation{getCandidateConversations(selectedCandidate.id).length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                   
-                  <div className="space-y-6">
+                  <div className="space-y-6 flex-1 overflow-y-auto">
                     {getCandidateConversations(selectedCandidate.id).map((conversation, index) => (
                       <div key={conversation.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
                         <div className="flex items-center gap-2 mb-4">
@@ -677,7 +695,7 @@ export default function Home() {
                                     <span className={`text-xs font-medium ${
                                       message.source === 'user' ? 'text-blue-100' : 'text-slate-600 dark:text-slate-400'
                                     }`}>
-                                      {message.source === 'user' ? '👤 Candidate' : '🤖 AI Interviewer'}
+                                      {message.source === 'user' ? <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> Candidate</span> : <span className="flex items-center gap-1"><RiRobotLine className="w-4 h-4" /> AI Interviewer</span>}
                                     </span>
                                   </div>
                                   <p className="text-sm whitespace-pre-wrap">{message.message}</p>
@@ -696,7 +714,7 @@ export default function Home() {
                   
                   {getCandidateConversations(selectedCandidate.id).length === 0 && (
                     <div className="text-center py-8 text-muted-foreground">
-                      <div className="text-4xl mb-2">💬</div>
+                      <div className="text-4xl mb-2"><RiChat3Line /></div>
                       <p>No conversations found for this candidate.</p>
                     </div>
                   )}
@@ -712,7 +730,7 @@ export default function Home() {
               <div className="card p-6">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-8 h-8 bg-gradient-to-r from-orange-400 to-red-500 rounded-full flex items-center justify-center">
-                    <span className="text-white text-sm font-bold">📂</span>
+                    <RiFolderLine className="text-white text-sm font-bold" />
                   </div>
                   <h2 className="text-xl font-semibold">Bulk Upload Candidates</h2>
                 </div>
@@ -743,7 +761,7 @@ export default function Home() {
                         Uploading...
                       </div>
                     ) : (
-                      <>🚀 Upload Candidates</>
+                      <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Upload Candidates</span>
                     )}
                   </Button>
                 </form>
@@ -833,7 +851,7 @@ export default function Home() {
                       Analyzing...
                     </div>
                   ) : (
-                    <>🚀 Execute Analysis</>
+                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Execute Analysis</span>
                   )}
                 </Button>
               </div>
