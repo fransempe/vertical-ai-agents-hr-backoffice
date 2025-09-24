@@ -60,11 +60,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update meet status to active if it's still pending
-    let updatedMeet = meet;
-    if (meet.status === 'pending') {
-      updatedMeet = await db.updateMeet(meet.id, { status: 'active' });
-    }
+    // No status update - keep meet status as is
 
     // Authentication successful
     return NextResponse.json(
@@ -72,12 +68,12 @@ export async function POST(request: NextRequest) {
         success: true,
         message: 'Token authentication successful',
         meet: {
-          id: updatedMeet.id,
-          token: updatedMeet.token,
-          link: updatedMeet.link,
-          status: updatedMeet.status,
-          scheduled_at: updatedMeet.scheduled_at,
-          password: updatedMeet.password,
+          id: meet.id,
+          token: meet.token,
+          link: meet.link,
+          status: meet.status,
+          scheduled_at: meet.scheduled_at,
+          password: meet.password,
         },
         candidate: {
           id: candidate.id,

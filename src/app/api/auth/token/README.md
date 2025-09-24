@@ -23,7 +23,7 @@ Authenticate using a meeting token.
     "id": "meet-id",
     "token": "interview-token",
     "link": "interview-link",
-    "status": "active",
+    "status": "pending",
     "scheduled_at": "2024-01-01T10:00:00Z",
     "password": "interview-password"
   },
@@ -100,8 +100,7 @@ curl "http://localhost:3000/api/auth/token?token=your-interview-token"
 ## Features
 
 - ✅ Token-based authentication
-- ✅ Automatic status updates (pending → active)
-- ✅ Interview status validation
+- ✅ Interview status validation (no automatic updates)
 - ✅ Candidate information retrieval
 - ✅ CORS support
 - ✅ Error handling
