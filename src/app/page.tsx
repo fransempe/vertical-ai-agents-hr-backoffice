@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
-import { Candidate, Meet, Conversation } from '@/lib/database/types';
+import { Candidate, Meet, Conversation, Agent } from '@/lib/database/types';
 import { 
   RiExternalLinkLine, 
   RiDeleteBinLine, 
@@ -30,16 +30,18 @@ import {
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes'>('candidates');
+  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents'>('candidates');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [meetForm, setMeetForm] = useState({ candidate_id: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '' });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
+  const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [analysisResult, setAnalysisResult] = useState<any>(null);
@@ -48,6 +50,7 @@ export default function Home() {
     fetchCandidates();
     fetchMeets();
     fetchConversations();
+    fetchAgents();
   }, []);
 
 
@@ -93,6 +96,21 @@ export default function Home() {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(prev => ({ ...prev, conversations: false }));
+    }
+  };
+
+  const fetchAgents = async () => {
+    setLoading(prev => ({ ...prev, agents: true }));
+    try {
+      const response = await fetch('/api/agents');
+      if (response.ok) {
+        const data = await response.json();
+        setAgents(data);
+      }
+    } catch (error) {
+      console.error('Error fetching agents:', error);
+    } finally {
+      setLoading(prev => ({ ...prev, agents: false }));
     }
   };
 
@@ -286,6 +304,49 @@ export default function Home() {
       setToast({ message: 'Failed to execute analysis', type: 'error' });
     } finally {
       setLoading(prev => ({ ...prev, analyzeProcess: false }));
+    }
+  };
+
+  const createAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(prev => ({ ...prev, createAgent: true }));
+    try {
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(agentForm),
+      });
+      if (response.ok) {
+        const newAgent = await response.json();
+        setAgents(prev => [newAgent, ...prev]);
+        setAgentForm({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' });
+        setToast({ message: 'Agent created successfully!', type: 'success' });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create agent');
+      }
+    } catch (error) {
+      console.error('Error creating agent:', error);
+      setToast({ message: error instanceof Error ? error.message : 'Failed to create agent', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, createAgent: false }));
+    }
+  };
+
+  const deleteAgent = async (id: string) => {
+    try {
+      const response = await fetch(`/api/agents/${id}`, {
+        method: 'DELETE',
+      });
+      if (response.ok) {
+        setAgents(prev => prev.filter(agent => agent.id !== id));
+        setToast({ message: 'Agent deleted successfully!', type: 'success' });
+      } else {
+        throw new Error('Failed to delete agent');
+      }
+    } catch (error) {
+      console.error('Error deleting agent:', error);
+      setToast({ message: 'Failed to delete agent', type: 'error' });
     }
   };
 
@@ -858,14 +919,170 @@ export default function Home() {
             </div>
           </div>
         )}
-      
-      {toast && (
-        <Toast
-          message={toast.message}
-          type={toast.type}
-          onClose={() => setToast(null)}
-        />
-      )}
+
+        {activeTab === 'agents' && (
+          <div className="animate-in h-full w-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 h-full">
+              {/* Create Agent Form */}
+              <div className="card p-6 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
+                    <RiRobotLine className="text-white text-sm" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Create New Agent</h2>
+                </div>
+                <form onSubmit={createAgent} className="space-y-6 flex-1">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Agent ID *
+                    </label>
+                    <Input
+                      type="text"
+                      value={agentForm.agent_id}
+                      onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
+                      placeholder="e.g., agent-001, dev-agent-v1"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Agent Name *
+                    </label>
+                    <Input
+                      type="text"
+                      value={agentForm.name}
+                      onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
+                      placeholder="e.g., Frontend Developer Agent"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Tech Stack *
+                    </label>
+                    <Input
+                      type="text"
+                      value={agentForm.tech_stack}
+                      onChange={(e) => setAgentForm({ ...agentForm, tech_stack: e.target.value })}
+                      placeholder="e.g., React, TypeScript, Node.js"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Description
+                    </label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                      rows={3}
+                      value={agentForm.description}
+                      onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
+                      placeholder="Agent description and capabilities"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      Status
+                    </label>
+                    <select
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                      value={agentForm.status}
+                      onChange={(e) => setAgentForm({ ...agentForm, status: e.target.value as 'active' | 'inactive' })}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                    </select>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={loading.createAgent}
+                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading.createAgent ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner"></div>
+                        Creating...
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> Create Agent</span>
+                    )}
+                  </Button>
+                </form>
+              </div>
+
+              {/* Agents List */}
+              <div className="card p-6 h-full flex flex-col">
+                <div className="flex items-center gap-2 mb-6">
+                  <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
+                    <RiRobotLine className="text-white text-sm" />
+                  </div>
+                  <h2 className="text-xl font-semibold">Agents ({agents.length})</h2>
+                </div>
+                <div className="space-y-3 flex-1 overflow-y-auto">
+                  {loading.agents ? (
+                    <div className="text-center py-8">
+                      <div className="loading-spinner mx-auto mb-2"></div>
+                      <p className="text-muted-foreground">Loading agents...</p>
+                    </div>
+                  ) : agents.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <div className="text-4xl mb-2"><RiRobotLine /></div>
+                      <p>No agents yet. Create your first agent!</p>
+                    </div>
+                  ) : (
+                    agents.map((agent, index) => (
+                      <div key={agent.id} className="group p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01]" style={{animationDelay: `${index * 0.1}s`}}>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                                {agent.name}
+                              </h3>
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                agent.status === 'active' 
+                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                              }`}>
+                                {agent.status}
+                              </span>
+                            </div>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                              <strong>ID:</strong> {agent.agent_id}
+                            </p>
+                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                              <strong>Tech Stack:</strong> {agent.tech_stack}
+                            </p>
+                            {agent.description && (
+                              <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">
+                                {agent.description}
+                              </p>
+                            )}
+                          </div>
+                          <Button 
+                            variant="destructive" 
+                            size="sm"
+                            onClick={() => deleteAgent(agent.id)}
+                            className="hover:scale-105 transition-transform ml-2"
+                          >
+                            <RiDeleteBinLine className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {toast && (
+          <Toast
+            message={toast.message}
+            type={toast.type}
+            onClose={() => setToast(null)}
+          />
+        )}
       </div>
     </DashboardLayout>
   );

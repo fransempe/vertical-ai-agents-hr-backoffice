@@ -6,12 +6,13 @@ import {
   RiCalendarLine, 
   RiChat3Line, 
   RiUploadLine, 
-  RiSettings3Line
+  RiSettings3Line,
+  RiRobotLine
 } from 'react-icons/ri';
 
 interface SidebarProps {
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents') => void;
 }
 
 const menuItems = [
@@ -44,6 +45,12 @@ const menuItems = [
     label: 'Processes',
     icon: RiSettings3Line,
     description: 'AI Analysis',
+  },
+  {
+    id: 'agents' as const,
+    label: 'Agents',
+    icon: RiRobotLine,
+    description: 'Manage AI Agents',
   },
 ];
 

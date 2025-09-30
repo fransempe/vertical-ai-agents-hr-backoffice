@@ -33,6 +33,17 @@ export interface Conversation {
   updated_at: string;
 }
 
+export interface Agent {
+  id: string;
+  agent_id: string;
+  name: string;
+  tech_stack: string;
+  description?: string;
+  status: 'active' | 'inactive';
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DatabaseProvider {
 
   // Candidates
@@ -58,4 +69,12 @@ export interface DatabaseProvider {
   getConversationsByCandidateId(candidateId: string): Promise<Conversation[]>;
   updateConversation(id: string, updates: Partial<Conversation>): Promise<Conversation>;
   deleteConversation(id: string): Promise<boolean>;
+
+  // Agents
+  createAgent(agent: Omit<Agent, 'id' | 'created_at' | 'updated_at'>): Promise<Agent>;
+  getAgents(): Promise<Agent[]>;
+  getAgent(id: string): Promise<Agent | null>;
+  getAgentByAgentId(agentId: string): Promise<Agent | null>;
+  updateAgent(id: string, updates: Partial<Agent>): Promise<Agent>;
+  deleteAgent(id: string): Promise<boolean>;
 }

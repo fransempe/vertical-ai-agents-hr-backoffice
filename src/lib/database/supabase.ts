@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { DatabaseProvider, Candidate, Meet, Conversation } from './types';
+import { DatabaseProvider, Candidate, Meet, Conversation, Agent } from './types';
 import { generateRandomPassword } from '../utils/password';
 
 export class SupabaseProvider implements DatabaseProvider {
@@ -253,6 +253,77 @@ export class SupabaseProvider implements DatabaseProvider {
   async deleteConversation(id: string): Promise<boolean> {
     const { error } = await this.client
       .from('conversations')
+      .delete()
+      .eq('id', id);
+
+    return !error;
+  }
+
+  // Agents
+  async createAgent(agent: Omit<Agent, 'id' | 'created_at' | 'updated_at'>): Promise<Agent> {
+    const { data, error } = await this.client
+      .from('agents')
+      .insert({
+        id: uuidv4(),
+        ...agent,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async getAgents(): Promise<Agent[]> {
+    const { data, error } = await this.client
+      .from('agents')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getAgent(id: string): Promise<Agent | null> {
+    const { data, error } = await this.client
+      .from('agents')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
+  async getAgentByAgentId(agentId: string): Promise<Agent | null> {
+    const { data, error } = await this.client
+      .from('agents')
+      .select('*')
+      .eq('agent_id', agentId)
+      .single();
+
+    if (error) return null;
+    return data;
+  }
+
+  async updateAgent(id: string, updates: Partial<Agent>): Promise<Agent> {
+    const { data, error } = await this.client
+      .from('agents')
+      .update({
+        ...updates,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteAgent(id: string): Promise<boolean> {
+    const { error } = await this.client
+      .from('agents')
       .delete()
       .eq('id', id);
 
