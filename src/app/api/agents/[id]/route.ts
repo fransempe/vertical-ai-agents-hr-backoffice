@@ -76,7 +76,7 @@ export async function PUT(
       );
     }
 
-    const updateData: any = {};
+    const updateData: Partial<{ agent_id: string; name: string; tech_stack: string; description: string; status: 'active' | 'inactive' }> = {};
     if (agent_id !== undefined) updateData.agent_id = agent_id;
     if (name !== undefined) updateData.name = name;
     if (tech_stack !== undefined) updateData.tech_stack = tech_stack;

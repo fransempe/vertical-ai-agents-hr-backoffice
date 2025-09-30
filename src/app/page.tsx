@@ -44,7 +44,6 @@ export default function Home() {
   const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
-  const [analysisResult, setAnalysisResult] = useState<any>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -288,7 +287,6 @@ export default function Home() {
       const result = await response.json();
       
       if (response.ok) {
-        setAnalysisResult(result);
         setToast({ 
           message: `Analysis completed successfully in ${result.execution_time || 'N/A'}`,
           type: 'success' 
