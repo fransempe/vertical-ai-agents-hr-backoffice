@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { DatabaseProvider, Candidate, Meet, Conversation, Agent } from './types';
+import { DatabaseProvider, Candidate, Meet, Conversation, Agent, JdInterview } from './types';
 import { generateRandomPassword } from '../utils/password';
 
 export class SupabaseProvider implements DatabaseProvider {
@@ -101,7 +101,8 @@ export class SupabaseProvider implements DatabaseProvider {
       .from('meets')
       .select(`
         *,
-        candidate:candidates(name, email)
+        candidate:candidates(name, email),
+        jd_interviews:jd_interviews(id, agent_id, interview_name, job_description)
       `)
       .order('created_at', { ascending: false });
 
@@ -114,7 +115,8 @@ export class SupabaseProvider implements DatabaseProvider {
       .from('meets')
       .select(`
         *,
-        candidate:candidates(name, email)
+        candidate:candidates(name, email),
+        jd_interviews:jd_interviews(id, agent_id, interview_name, job_description)
       `)
       .eq('id', id)
       .maybeSingle();
@@ -128,7 +130,8 @@ export class SupabaseProvider implements DatabaseProvider {
       .from('meets')
       .select(`
         *,
-        candidate:candidates(name, email)
+        candidate:candidates(name, email),
+        jd_interviews:jd_interviews(id, agent_id, interview_name, job_description)
       `)
       .eq('token', token)
       .maybeSingle();
@@ -328,5 +331,26 @@ export class SupabaseProvider implements DatabaseProvider {
       .eq('id', id);
 
     return !error;
+  }
+
+  // JD Interviews
+  async getJdInterviews(): Promise<JdInterview[]> {
+    const { data, error } = await this.client
+      .from('jd_interviews')
+      .select('id, agent_id, interview_name, job_description');
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getJdInterview(id: string): Promise<JdInterview | null> {
+    const { data, error } = await this.client
+      .from('jd_interviews')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) return null;
+    return data;
   }
 }

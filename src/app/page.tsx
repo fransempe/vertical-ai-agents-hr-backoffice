@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
-import { Candidate, Meet, Conversation, Agent } from '@/lib/database/types';
+import { Candidate, Meet, Conversation, Agent, JdInterview } from '@/lib/database/types';
 import { 
   RiExternalLinkLine, 
   RiDeleteBinLine, 
@@ -35,13 +34,14 @@ export default function Home() {
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [jdInterviews, setJdInterviews] = useState<JdInterview[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
-  const [meetForm, setMeetForm] = useState({ candidate_id: '' });
+  const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '' });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -50,6 +50,7 @@ export default function Home() {
     fetchMeets();
     fetchConversations();
     fetchAgents();
+    fetchJdInterviews();
   }, []);
 
 
@@ -113,6 +114,26 @@ export default function Home() {
     }
   };
 
+  const fetchJdInterviews = async () => {
+    setLoading(prev => ({ ...prev, jdInterviews: true }));
+    try {
+      const response = await fetch('/api/jd-interviews');
+      if (response.ok) {
+        const data = await response.json();
+        setJdInterviews(data);
+      } else {
+        const errorData = await response.json();
+        setToast({ message: `Failed to load JD interviews: ${errorData.error}`, type: 'error' });
+      }
+    } catch (error) {
+      console.error('Error fetching JD interviews:', error);
+      setToast({ message: 'Error fetching JD interviews', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, jdInterviews: false }));
+    }
+  };
+
+
 
   const createCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -139,18 +160,27 @@ export default function Home() {
     e.preventDefault();
     setLoading(prev => ({ ...prev, createMeet: true }));
     try {
+      const meetData = {
+        candidate_id: meetForm.candidate_id,
+        ...(meetForm.jd_interviews_id && { jd_interviews_id: meetForm.jd_interviews_id })
+      };
+      
       const response = await fetch('/api/meets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(meetForm),
+        body: JSON.stringify(meetData),
       });
       
       if (response.ok) {
-        setMeetForm({ candidate_id: '' });
+        setMeetForm({ candidate_id: '', jd_interviews_id: '' });
         fetchMeets();
+        setToast({ message: 'Interview scheduled successfully!', type: 'success' });
+      } else {
+        throw new Error('Failed to create meet');
       }
     } catch (error) {
       console.error('Error creating meet:', error);
+      setToast({ message: 'Failed to schedule interview', type: 'error' });
     } finally {
       setLoading(prev => ({ ...prev, createMeet: false }));
     }
@@ -479,6 +509,33 @@ export default function Home() {
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                    Select JD Interview *
+                  </label>
+                  <select
+                    value={meetForm.jd_interviews_id}
+                    onChange={(e) => setMeetForm({ ...meetForm, jd_interviews_id: e.target.value })}
+                    className="w-full h-12 p-3 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring"
+                    required
+                  >
+                    <option value="" disabled>Choose a JD Interview...</option>
+                    {loading.jdInterviews ? (
+                      <option disabled>Loading interviews...</option>
+                    ) : (
+                      jdInterviews.map((interview) => (
+                        <option key={interview.id} value={interview.id}>
+                          {interview.interview_name} - Agent: {interview.agent_id}
+                        </option>
+                      ))
+                    )}
+                  </select>
+                  {meetForm.jd_interviews_id && (
+                    <p className="text-xs text-slate-500 mt-1">
+                      This interview will be linked to the selected JD template
+                    </p>
+                  )}
+                </div>
                 <Button 
                   type="submit" 
                   disabled={loading.createMeet}
@@ -527,7 +584,13 @@ export default function Home() {
                             {meet.candidate && (
                               <div className="space-y-1 text-sm mb-2">
                                 <p className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {meet.candidate.name}</p>
-                                <p className="text-slate-600 dark:text-slate-400">📧 {meet.candidate.email}</p>
+                                <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {meet.candidate.email}</p>
+                                {meet.jd_interviews && (
+                                  <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                    <RiClipboardLine className="w-4 h-4" /> 
+                                    JD: {meet.jd_interviews.interview_name} (Agent: {meet.jd_interviews.agent_id})
+                                  </p>
+                                )}
                               </div>
                             )}
                             <div className="space-y-1 text-sm">

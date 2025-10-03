@@ -11,6 +11,7 @@ export interface Candidate {
 export interface Meet {
   id: string;
   candidate_id: string;
+  jd_interviews_id?: string;
   token: string;
   link: string;
   password: string;
@@ -21,6 +22,10 @@ export interface Meet {
   candidate?: {
     name: string;
     email: string;
+  };
+  jd_interviews?: {
+    interview_name: string;
+    agent_id: string;
   };
 }
 
@@ -44,6 +49,13 @@ export interface Agent {
   updated_at: string;
 }
 
+export interface JdInterview {
+  id: string;
+  agent_id: string;
+  interview_name: string;
+  job_description: string;
+}
+
 export interface DatabaseProvider {
 
   // Candidates
@@ -54,7 +66,7 @@ export interface DatabaseProvider {
   deleteCandidate(id: string): Promise<boolean>;
 
   // Meets
-  createMeet(meet: Omit<Meet, 'id' | 'token' | 'link' | 'password' | 'created_at' | 'updated_at'>): Promise<Meet>;
+  createMeet(meet: Omit<Meet, 'id' | 'token' | 'link' | 'password' | 'created_at' | 'updated_at' | 'candidate' | 'jd_interviews'>): Promise<Meet>;
   getMeets(): Promise<Meet[]>;
   getMeet(id: string): Promise<Meet | null>;
   getMeetByToken(token: string): Promise<Meet | null>;
@@ -77,4 +89,8 @@ export interface DatabaseProvider {
   getAgentByAgentId(agentId: string): Promise<Agent | null>;
   updateAgent(id: string, updates: Partial<Agent>): Promise<Agent>;
   deleteAgent(id: string): Promise<boolean>;
+
+  // JD Interviews
+  getJdInterviews(): Promise<JdInterview[]>;
+  getJdInterview(id: string): Promise<JdInterview | null>;
 }

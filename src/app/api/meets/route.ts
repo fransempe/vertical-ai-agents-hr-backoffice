@@ -38,7 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { candidate_id, status = 'pending', scheduled_at } = body;
+    const { candidate_id, jd_interviews_id, status = 'pending', scheduled_at } = body;
 
     if (!candidate_id) {
       return NextResponse.json({ error: 'Candidate ID is required' }, { status: 400, headers: corsHeaders });
@@ -49,12 +49,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Candidate not found' }, { status: 404, headers: corsHeaders });
     }
 
-    const meetWithPassword = await db.createMeet({ 
-      candidate_id, 
-      status, 
-      scheduled_at,
-      // password // 'password' does not exist in the expected type for db.createMeet input.
-    });
+    const meetData: {
+      candidate_id: string;
+      status: 'pending' | 'active' | 'completed' | 'cancelled';
+      scheduled_at?: string;
+      jd_interviews_id?: string;
+    } = {
+      candidate_id,
+      status: status as 'pending' | 'active' | 'completed' | 'cancelled',
+      ...(scheduled_at && { scheduled_at }),
+    };
+
+    // Add jd_interviews_id if provided
+    if (jd_interviews_id) {
+      meetData.jd_interviews_id = jd_interviews_id;
+    }
+
+    const meetWithPassword = await db.createMeet(meetData);
+    
     // Return meet data including the plain password for the admin
     return NextResponse.json({
       ...meetWithPassword,
