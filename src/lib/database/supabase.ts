@@ -396,10 +396,19 @@ export class SupabaseProvider implements DatabaseProvider {
         scheduled_at: meet.scheduled_at,
         created_at: meet.created_at,
         updated_at: meet.updated_at,
-        candidate: meet.candidates ? {
-          name: (meet.candidates as any).name || (meet.candidates as any)[0]?.name,
-          email: (meet.candidates as any).email || (meet.candidates as any)[0]?.email
-        } : undefined,
+        candidate: meet.candidates ? (() => {
+          
+          const candidates = meet.candidates;
+          if (Array.isArray(candidates)) {
+            // If it's an array, take the first candidate's info
+            return candidates[0] ? { name: candidates[0].name, email: candidates[0].email } : undefined;
+          } else {
+            // If it's a single object (and not null, as checked by `meet.candidates ?`)
+            // Explicitly assert the type of 'candidates' to a single object to resolve the 'never' type error.
+            const singleCandidate = candidates as { name: string; email: string; };
+            return { name: singleCandidate.name, email: singleCandidate.email };
+          }
+        })() : undefined, 
         jd_interviews: {
           interview_name: jdInterview.interview_name,
           agent_id: jdInterview.agent_id
