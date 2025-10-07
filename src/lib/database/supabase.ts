@@ -363,7 +363,7 @@ export class SupabaseProvider implements DatabaseProvider {
     if (jdError) throw jdError;
 
     // Then get meets for each JD interview
-    const result = [];
+    const result: { jd_interview: JdInterview; meets: Meet[] }[] = [];
     for (const jdInterview of jdInterviews || []) {
       const { data: meets, error: meetsError } = await this.client
         .from('meets')
@@ -385,11 +385,20 @@ export class SupabaseProvider implements DatabaseProvider {
       if (meetsError) throw meetsError;
 
       // Transform the data to match our Meet interface
-      const transformedMeets = (meets || []).map((meet: any) => ({
-        ...meet,
+      const transformedMeets: Meet[] = (meets || []).map((meet) => ({
+        id: meet.id,
+        candidate_id: meet.candidate_id,
+        jd_interviews_id: meet.jd_interviews_id,
+        token: meet.token,
+        link: meet.link,
+        password: meet.password,
+        status: meet.status as 'pending' | 'active' | 'completed' | 'cancelled',
+        scheduled_at: meet.scheduled_at,
+        created_at: meet.created_at,
+        updated_at: meet.updated_at,
         candidate: meet.candidates ? {
-          name: meet.candidates.name,
-          email: meet.candidates.email
+          name: (meet.candidates as any).name || (meet.candidates as any)[0]?.name,
+          email: (meet.candidates as any).email || (meet.candidates as any)[0]?.email
         } : undefined,
         jd_interviews: {
           interview_name: jdInterview.interview_name,
@@ -398,7 +407,12 @@ export class SupabaseProvider implements DatabaseProvider {
       }));
 
       result.push({
-        jd_interview: jdInterview,
+        jd_interview: {
+          id: jdInterview.id,
+          agent_id: jdInterview.agent_id,
+          interview_name: jdInterview.interview_name,
+          job_description: jdInterview.job_description
+        },
         meets: transformedMeets
       });
     }
