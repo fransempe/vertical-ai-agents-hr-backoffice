@@ -93,4 +93,5 @@ export interface DatabaseProvider {
   // JD Interviews
   getJdInterviews(): Promise<JdInterview[]>;
   getJdInterview(id: string): Promise<JdInterview | null>;
+  getMeetsByJdInterviews(): Promise<{ jd_interview: JdInterview; meets: Meet[] }[]>;
 }

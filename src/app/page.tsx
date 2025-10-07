@@ -24,24 +24,28 @@ import {
   RiFolderLine,
   RiSendPlaneLine,
   RiArrowRightSLine,
-  RiStarLine
+  RiStarLine,
+  RiArrowDownSLine,
+  RiArrowUpSLine
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents'>('candidates');
+  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports'>('candidates');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [jdInterviews, setJdInterviews] = useState<JdInterview[]>([]);
+  const [meetsByJdInterviews, setMeetsByJdInterviews] = useState<{ jd_interview: JdInterview; meets: Meet[] }[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '' });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -51,6 +55,7 @@ export default function Home() {
     fetchConversations();
     fetchAgents();
     fetchJdInterviews();
+    fetchMeetsByJdInterviews();
   }, []);
 
 
@@ -130,6 +135,25 @@ export default function Home() {
       setToast({ message: 'Error fetching JD interviews', type: 'error' });
     } finally {
       setLoading(prev => ({ ...prev, jdInterviews: false }));
+    }
+  };
+
+  const fetchMeetsByJdInterviews = async () => {
+    setLoading(prev => ({ ...prev, meetsByJdInterviews: true }));
+    try {
+      const response = await fetch('/api/meets/by-jd-interviews');
+      if (response.ok) {
+        const data = await response.json();
+        setMeetsByJdInterviews(data);
+      } else {
+        const errorData = await response.json();
+        setToast({ message: `Failed to load reports data: ${errorData.error}`, type: 'error' });
+      }
+    } catch (error) {
+      console.error('Error fetching meets by JD interviews:', error);
+      setToast({ message: 'Error fetching reports data', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, meetsByJdInterviews: false }));
     }
   };
 
@@ -375,6 +399,60 @@ export default function Home() {
     } catch (error) {
       console.error('Error deleting agent:', error);
       setToast({ message: 'Failed to delete agent', type: 'error' });
+    }
+  };
+
+  // Analytics helper functions
+  const getStatusCounts = (meets: Meet[]) => {
+    return meets.reduce((acc, meet) => {
+      acc[meet.status] = (acc[meet.status] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+  };
+
+  const getTotalMeets = () => {
+    return meetsByJdInterviews.reduce((total, group) => total + group.meets.length, 0);
+  };
+
+  const getOverallStatusCounts = () => {
+    const allMeets = meetsByJdInterviews.flatMap(group => group.meets);
+    return getStatusCounts(allMeets);
+  };
+
+  const getStatusPercentage = (status: string, total: number) => {
+    const overallCounts = getOverallStatusCounts();
+    return total > 0 ? ((overallCounts[status] || 0) / total * 100).toFixed(1) : '0.0';
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+      case 'active': return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200';
+      case 'completed': return 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+      case 'cancelled': return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+      default: return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
+    }
+  };
+
+  const toggleReportExpansion = (jdInterviewId: string) => {
+    setExpandedReports(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(jdInterviewId)) {
+        newSet.delete(jdInterviewId);
+      } else {
+        newSet.add(jdInterviewId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleAllReports = () => {
+    if (expandedReports.size === meetsByJdInterviews.length) {
+      // All are expanded, collapse all
+      setExpandedReports(new Set());
+    } else {
+      // Some or none are expanded, expand all
+      setExpandedReports(new Set(meetsByJdInterviews.map(group => group.jd_interview.id)));
     }
   };
 
@@ -1134,6 +1212,230 @@ export default function Home() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {activeTab === 'reports' && (
+          <div className="animate-in h-full w-full">
+            {loading.meetsByJdInterviews ? (
+              <div className="text-center py-8">
+                <div className="loading-spinner mx-auto mb-2"></div>
+                <p className="text-muted-foreground">Loading reports data...</p>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Overall Statistics */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="card p-6 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Interviews</p>
+                        <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{getTotalMeets()}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
+                        <RiCalendarLine className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card p-6 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-green-600 dark:text-green-400">Completed</p>
+                        <p className="text-3xl font-bold text-green-900 dark:text-green-100">{getOverallStatusCounts().completed || 0}</p>
+                        <p className="text-xs text-green-600 dark:text-green-400">{getStatusPercentage('completed', getTotalMeets())}% of total</p>
+                      </div>
+                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                        <RiCheckLine className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card p-6 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-yellow-200 dark:border-yellow-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</p>
+                        <p className="text-3xl font-bold text-yellow-900 dark:text-yellow-100">{getOverallStatusCounts().pending || 0}</p>
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400">{getStatusPercentage('pending', getTotalMeets())}% of total</p>
+                      </div>
+                      <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
+                        <RiClipboardLine className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card p-6 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-purple-600 dark:text-purple-400">JD Templates</p>
+                        <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">{meetsByJdInterviews.length}</p>
+                      </div>
+                      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
+                        <RiRobotLine className="w-6 h-6 text-white" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Detailed Reports by JD Interview */}
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                      <RiBarChartLine className="w-6 h-6" />
+                      Interview Analytics by Job Description
+                    </h2>
+                    {meetsByJdInterviews.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={toggleAllReports}
+                        className="flex items-center gap-2 hover:scale-105 transition-transform"
+                      >
+                        {expandedReports.size === meetsByJdInterviews.length ? (
+                          <>
+                            <RiArrowUpSLine className="w-4 h-4" />
+                            Collapse All
+                          </>
+                        ) : (
+                          <>
+                            <RiArrowDownSLine className="w-4 h-4" />
+                            Expand All
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                  
+                  {meetsByJdInterviews.length === 0 ? (
+                    <div className="text-center py-12 text-muted-foreground">
+                      <div className="text-6xl mb-4"><RiBarChartLine /></div>
+                      <p className="text-xl mb-2">No interview data available</p>
+                      <p>Create some interviews to see analytics here.</p>
+                    </div>
+                  ) : (
+                    meetsByJdInterviews.map((group, index) => {
+                      const statusCounts = getStatusCounts(group.meets);
+                      const totalMeetsInGroup = group.meets.length;
+                      const isExpanded = expandedReports.has(group.jd_interview.id);
+                      
+                      return (
+                        <div key={group.jd_interview.id} className="card overflow-hidden transition-all duration-200" style={{animationDelay: `${index * 0.1}s`}}>
+                          {/* Collapsible Header */}
+                          <div 
+                            className="p-6 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                            onClick={() => toggleReportExpansion(group.jd_interview.id)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold">
+                                  {index + 1}
+                                </div>
+                                <div className="flex-1">
+                                  <h3 className="text-xl font-semibold text-slate-800 dark:text-slate-200">
+                                    {group.jd_interview.interview_name}
+                                  </h3>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    Agent: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">{group.jd_interview.agent_id}</span>
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-right">
+                                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">{totalMeetsInGroup}</p>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">Total Interviews</p>
+                                </div>
+                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 transition-transform duration-200">
+                                  {isExpanded ? (
+                                    <RiArrowUpSLine className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                                  ) : (
+                                    <RiArrowDownSLine className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Content */}
+                          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-[2000px] opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
+                            <div className="px-6 pb-6 space-y-4 border-t border-slate-200 dark:border-slate-700 pt-4">
+
+                            {/* Status Distribution */}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              {Object.entries(statusCounts).map(([status, count]) => (
+                                <div key={status} className="text-center p-3 rounded-lg bg-slate-50 dark:bg-slate-800">
+                                  <div className={`inline-flex px-3 py-1 rounded-full text-sm font-medium mb-2 ${getStatusColor(status)}`}>
+                                    {status.charAt(0).toUpperCase() + status.slice(1)}
+                                  </div>
+                                  <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">{count}</p>
+                                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                                    {totalMeetsInGroup > 0 ? ((count / totalMeetsInGroup) * 100).toFixed(1) : '0.0'}%
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Recent Interviews */}
+                            {group.meets.length > 0 && (
+                              <div>
+                                <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
+                                  <RiUserLine className="w-4 h-4" />
+                                  Recent Interviews ({group.meets.length})
+                                </h4>
+                                <div className="space-y-2 max-h-60 overflow-y-auto">
+                                  {group.meets.slice(0, 5).map((meet) => (
+                                    <div key={meet.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
+                                          {meet.candidate?.name?.charAt(0).toUpperCase() || '?'}
+                                        </div>
+                                        <div>
+                                          <p className="font-medium text-slate-800 dark:text-slate-200">
+                                            {meet.candidate?.name || 'Unknown Candidate'}
+                                          </p>
+                                          <p className="text-sm text-slate-600 dark:text-slate-400">
+                                            {meet.candidate?.email || 'No email'}
+                                          </p>
+                                        </div>
+                                      </div>
+                                      <div className="text-right">
+                                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(meet.status)}`}>
+                                          {meet.status}
+                                        </span>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                          {new Date(meet.created_at).toLocaleDateString()}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {group.meets.length > 5 && (
+                                    <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-2">
+                                      ... and {group.meets.length - 5} more interviews
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Job Description Preview */}
+                            <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
+                              <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-2">Job Description Preview</h4>
+                              <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 max-h-32 overflow-y-auto">
+                                <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
+                                  {group.jd_interview.job_description.length > 200 
+                                    ? `${group.jd_interview.job_description.substring(0, 200)}...` 
+                                    : group.jd_interview.job_description}
+                                </p>
+                              </div>
+                            </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
 

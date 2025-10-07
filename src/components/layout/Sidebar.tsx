@@ -7,12 +7,13 @@ import {
   RiChat3Line, 
   RiUploadLine, 
   RiSettings3Line,
-  RiRobotLine
+  RiRobotLine,
+  RiBarChartLine
 } from 'react-icons/ri';
 
 interface SidebarProps {
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports') => void;
 }
 
 const menuItems = [
@@ -46,12 +47,18 @@ const menuItems = [
     icon: RiSettings3Line,
     description: 'AI Analysis',
   },
-  {
-    id: 'agents' as const,
-    label: 'Agents',
-    icon: RiRobotLine,
-    description: 'Manage AI Agents',
-  },
+    {
+      id: 'agents' as const,
+      label: 'Agents',
+      icon: RiRobotLine,
+      description: 'Manage AI Agents',
+    },
+    {
+      id: 'reports' as const,
+      label: 'Reports',
+      icon: RiBarChartLine,
+      description: 'Analytics & Insights',
+    },
 ];
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {

@@ -353,4 +353,56 @@ export class SupabaseProvider implements DatabaseProvider {
     if (error) return null;
     return data;
   }
+
+  async getMeetsByJdInterviews(): Promise<{ jd_interview: JdInterview; meets: Meet[] }[]> {
+    // First get all JD interviews
+    const { data: jdInterviews, error: jdError } = await this.client
+      .from('jd_interviews')
+      .select('id, agent_id, interview_name, job_description');
+
+    if (jdError) throw jdError;
+
+    // Then get meets for each JD interview
+    const result = [];
+    for (const jdInterview of jdInterviews || []) {
+      const { data: meets, error: meetsError } = await this.client
+        .from('meets')
+        .select(`
+          id,
+          candidate_id,
+          jd_interviews_id,
+          token,
+          link,
+          password,
+          status,
+          scheduled_at,
+          created_at,
+          updated_at,
+          candidates(name, email)
+        `)
+        .eq('jd_interviews_id', jdInterview.id);
+
+      if (meetsError) throw meetsError;
+
+      // Transform the data to match our Meet interface
+      const transformedMeets = (meets || []).map((meet: any) => ({
+        ...meet,
+        candidate: meet.candidates ? {
+          name: meet.candidates.name,
+          email: meet.candidates.email
+        } : undefined,
+        jd_interviews: {
+          interview_name: jdInterview.interview_name,
+          agent_id: jdInterview.agent_id
+        }
+      }));
+
+      result.push({
+        jd_interview: jdInterview,
+        meets: transformedMeets
+      });
+    }
+
+    return result;
+  }
 }
