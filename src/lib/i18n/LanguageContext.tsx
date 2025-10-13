@@ -54,7 +54,7 @@ export function LanguageProvider({ children }: LanguageProviderProps) {
             return key;
           }
         }
-        return fallbackValue;
+        return typeof fallbackValue === 'string' ? fallbackValue : key;
       }
     }
     
