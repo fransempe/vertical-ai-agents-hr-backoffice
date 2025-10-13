@@ -1,6 +1,8 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
+import { LanguageSwitch } from '@/components/ui/LanguageSwitch';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 import { RiMenuLine } from 'react-icons/ri';
 
 interface NavbarProps {
@@ -9,6 +11,19 @@ interface NavbarProps {
 }
 
 export function Navbar({ onMenuClick, title = "HR Interview Dashboard" }: NavbarProps) {
+  const { language } = useLanguage();
+
+  const getFormattedDate = () => {
+    const now = new Date();
+    const locale = language === 'es' ? 'es-ES' : 'en-US';
+    
+    return now.toLocaleDateString(locale, { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
 
   return (
     <header className="bg-gradient-to-r from-purple-800 via-purple-700 to-pink-600 rounded-2xl m-4 px-6 py-4 shadow-2xl" style={{ backgroundImage: 'url(/images/sidebar-bg.svg)', backgroundSize: 'cover' }}>
@@ -28,14 +43,13 @@ export function Navbar({ onMenuClick, title = "HR Interview Dashboard" }: Navbar
               {title}
             </h1>
             <p className="text-sm text-white/70">
-              {new Date().toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })}
+              {getFormattedDate()}
             </p>
           </div>
+        </div>
+        
+        <div className="flex items-center">
+          <LanguageSwitch />
         </div>
       </div>
     </header>

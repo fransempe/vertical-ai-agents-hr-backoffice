@@ -27,13 +27,20 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, phone } = body;
+    const { name, email, phone, cv_url } = body;
 
     if (!name || !email) {
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400, headers: corsHeaders });
     }
 
-    const candidate = await db.createCandidate({ name, email, phone });
+    const candidateData = {
+      name,
+      email,
+      ...(phone && { phone }),
+      ...(cv_url && { cv_url })
+    };
+
+    const candidate = await db.createCandidate(candidateData);
     return NextResponse.json(candidate, { status: 201, headers: corsHeaders });
   } catch (error) {
     console.error('Error creating candidate:', error);

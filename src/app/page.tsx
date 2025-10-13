@@ -26,12 +26,15 @@ import {
   RiArrowRightSLine,
   RiStarLine,
   RiArrowDownSLine,
-  RiArrowUpSLine
+  RiArrowUpSLine,
+  RiUploadLine
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports'>('candidates');
+  const { t } = useLanguage();
+  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports'>('reports');
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -40,12 +43,14 @@ export default function Home() {
   const [meetsByJdInterviews, setMeetsByJdInterviews] = useState<{ jd_interview: JdInterview; meets: Meet[] }[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+  const [candidateCreationTab, setCandidateCreationTab] = useState<'manual' | 'cv'>('manual');
   const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '' });
-  const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '' });
+  const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null });
+  const [cvOnlyForm, setCvOnlyForm] = useState({ cv_file: null as File | null });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -159,22 +164,119 @@ export default function Home() {
 
 
 
+  const uploadCV = async (file: File, candidateName: string): Promise<string | null> => {
+    setLoading(prev => ({ ...prev, uploadCV: true }));
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('candidateName', candidateName);
+
+      const response = await fetch('/api/upload/cv', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        return data.url;
+      } else {
+        const errorData = await response.json();
+        setToast({ message: errorData.error || 'Failed to upload CV', type: 'error' });
+        return null;
+      }
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      setToast({ message: 'Failed to upload CV', type: 'error' });
+      return null;
+    } finally {
+      setLoading(prev => ({ ...prev, uploadCV: false }));
+    }
+  };
+
   const createCandidate = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(prev => ({ ...prev, createCandidate: true }));
     try {
+      let cv_url = null;
+
+      // Upload CV if file is selected
+      if (candidateForm.cv_file) {
+        if (!candidateForm.name.trim()) {
+          setToast({ message: 'Candidate name is required to upload CV', type: 'error' });
+          return;
+        }
+        cv_url = await uploadCV(candidateForm.cv_file, candidateForm.name);
+        if (!cv_url) {
+          // If CV upload failed, don't create candidate
+          return;
+        }
+      }
+
+      // Create candidate data
+      const candidateData = {
+        name: candidateForm.name,
+        email: candidateForm.email,
+        phone: candidateForm.phone,
+        ...(cv_url && { cv_url })
+      };
+
       const response = await fetch('/api/candidates', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(candidateForm),
+        body: JSON.stringify(candidateData),
       });
       
       if (response.ok) {
-        setCandidateForm({ name: '', email: '', phone: '' });
+        setCandidateForm({ name: '', email: '', phone: '', cv_file: null });
         fetchCandidates();
+        setToast({ message: 'Candidate created successfully!', type: 'success' });
+        
+        // Reset file input
+        const fileInput = document.querySelector('input[type="file"][accept=".pdf,.doc,.docx"]') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+      } else {
+        throw new Error('Failed to create candidate');
       }
     } catch (error) {
       console.error('Error creating candidate:', error);
+      setToast({ message: 'Failed to create candidate', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, createCandidate: false }));
+    }
+  };
+
+  const uploadCVOnly = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(prev => ({ ...prev, createCandidate: true }));
+    try {
+      if (!cvOnlyForm.cv_file) {
+        setToast({ message: 'Please select a CV file', type: 'error' });
+        return;
+      }
+
+      // Generate a unique filename for the CV
+      const timestamp = Date.now();
+      const tempName = `CV-${timestamp}`;
+      const cv_url = await uploadCV(cvOnlyForm.cv_file, tempName);
+      
+      if (!cv_url) {
+        return;
+      }
+
+      // Only upload the CV, don't create any candidate
+      setCvOnlyForm({ cv_file: null });
+      setToast({ 
+        message: 'CV uploaded successfully! The file will be processed by another system.', 
+        type: 'success' 
+      });
+      
+      // Reset file input
+      const fileInput = document.querySelector('input[type="file"][id="cv-only-upload"]') as HTMLInputElement;
+      if (fileInput) fileInput.value = '';
+      
+    } catch (error) {
+      console.error('Error uploading CV:', error);
+      setToast({ message: 'Failed to upload CV', type: 'error' });
     } finally {
       setLoading(prev => ({ ...prev, createCandidate: false }));
     }
@@ -434,6 +536,16 @@ export default function Home() {
     }
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return t('interviews.pending');
+      case 'active': return t('interviews.active');
+      case 'completed': return t('interviews.completed');
+      case 'cancelled': return t('interviews.cancelled');
+      default: return status;
+    }
+  };
+
   const toggleReportExpansion = (jdInterviewId: string) => {
     setExpandedReports(prev => {
       const newSet = new Set(prev);
@@ -462,70 +574,177 @@ export default function Home() {
 
 
         {activeTab === 'candidates' && (
-          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-            <div className="card p-6">
+          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
+            <div className="card p-6 h-full flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">+</span>
                 </div>
-                <h2 className="text-xl font-semibold">Create Candidate</h2>
+                <h2 className="text-xl font-semibold">{t('candidates.createCandidate')}</h2>
               </div>
-              <form onSubmit={createCandidate} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Full Name</label>
-                  <Input
-                    value={candidateForm.name}
-                    onChange={(e) => setCandidateForm({ ...candidateForm, name: e.target.value })}
-                    placeholder="Enter candidate's full name"
-                    className="h-12 transition-all focus:scale-[1.02]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Email Address</label>
-                  <Input
-                    type="email"
-                    value={candidateForm.email}
-                    onChange={(e) => setCandidateForm({ ...candidateForm, email: e.target.value })}
-                    placeholder="candidate@company.com"
-                    className="h-12 transition-all focus:scale-[1.02]"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Phone Number</label>
-                  <Input
-                    value={candidateForm.phone}
-                    onChange={(e) => setCandidateForm({ ...candidateForm, phone: e.target.value })}
-                    placeholder="+1 (555) 000-0000"
-                    className="h-12 transition-all focus:scale-[1.02]"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  disabled={loading.createCandidate}
-                  className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+
+              {/* Tab Navigation */}
+              <div className="flex mb-6 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
+                <button
+                  onClick={() => setCandidateCreationTab('manual')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    candidateCreationTab === 'manual'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
                 >
-                  {loading.createCandidate ? (
-                    <div className="flex items-center gap-2">
-                      <div className="loading-spinner"></div>
-                      Creating...
+                  <span className="flex items-center gap-2 justify-center">
+                    <RiUserLine className="w-4 h-4" />
+                    {t('candidates.manualEntry')}
+                  </span>
+                </button>
+                <button
+                  onClick={() => setCandidateCreationTab('cv')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    candidateCreationTab === 'cv'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 justify-center">
+                    <RiClipboardLine className="w-4 h-4" />
+                    {t('candidates.uploadCV')}
+                  </span>
+                </button>
+              </div>
+
+              {/* Manual Entry Tab */}
+              {candidateCreationTab === 'manual' && (
+                <form onSubmit={createCandidate} className="space-y-6">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">{t('candidates.fullName')}</label>
+                    <Input
+                      value={candidateForm.name}
+                      onChange={(e) => setCandidateForm({ ...candidateForm, name: e.target.value })}
+                      placeholder={t('candidates.fullName')}
+                      className="h-12 transition-all focus:scale-[1.02]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">{t('candidates.emailAddress')}</label>
+                    <Input
+                      type="email"
+                      value={candidateForm.email}
+                      onChange={(e) => setCandidateForm({ ...candidateForm, email: e.target.value })}
+                      placeholder="candidate@company.com"
+                      className="h-12 transition-all focus:scale-[1.02]"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">{t('candidates.phoneNumber')}</label>
+                    <Input
+                      value={candidateForm.phone}
+                      onChange={(e) => setCandidateForm({ ...candidateForm, phone: e.target.value })}
+                      placeholder="+1 (555) 000-0000"
+                      className="h-12 transition-all focus:scale-[1.02]"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                      {t('candidates.cvResume')} <span className="text-slate-500">({t('common.optional')})</span>
+                    </label>
+                    <input
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setCandidateForm({ ...candidateForm, cv_file: e.target.files?.[0] || null })}
+                      className="w-full h-12 p-1 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {t('candidates.supportedFormats')}
+                    </p>
+                  </div>
+                  <Button 
+                    type="submit" 
+                    disabled={loading.createCandidate}
+                    className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading.createCandidate || loading.uploadCV ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner"></div>
+                        {loading.uploadCV ? t('common.loading') : t('common.create') + '...'}
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> {t('candidates.createCandidate')}</span>
+                    )}
+                  </Button>
+                </form>
+              )}
+
+              {/* CV Upload Tab */}
+              {candidateCreationTab === 'cv' && (
+                <form onSubmit={uploadCVOnly} className="space-y-6">
+                  <div className="text-center py-8">
+                    <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <RiClipboardLine className="w-8 h-8 text-white" />
                     </div>
-                  ) : (
-                    <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> Create Candidate</span>
-                  )}
-                </Button>
-              </form>
+                    <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2">
+                      {t('candidates.uploadCVOnly')}
+                    </h3>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                      {t('candidates.selectCVFile')}
+                    </label>
+                    <input
+                      id="cv-only-upload"
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={(e) => setCvOnlyForm({ cv_file: e.target.files?.[0] || null })}
+                      className="w-full h-12 p-1 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100"
+                      required
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {t('candidates.supportedFormats')}
+                    </p>
+                  </div>
+
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
+                      <RiRobotLine className="w-4 h-4" />
+                      {t('candidates.aiProcessingFeatures')}
+                    </h4>
+                    <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                      <li>• {t('candidates.autoNameExtraction')}</li>
+                      <li>• {t('candidates.techStackIdentification')}</li>
+                      <li>• {t('candidates.experienceAnalysis')}</li>
+                      <li>• {t('candidates.skillsMapping')}</li>
+                    </ul>
+                  </div>
+
+                  <Button 
+                    type="submit" 
+                    disabled={loading.createCandidate || !cvOnlyForm.cv_file}
+                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loading.createCandidate || loading.uploadCV ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner"></div>
+                        {loading.uploadCV ? 'Uploading...' : 'Uploading...'}
+                      </div>
+                    ) : (
+                      <span className="flex items-center gap-1"><RiUploadLine className="w-4 h-4" /> Upload CV</span>
+                    )}
+                  </Button>
+                </form>
+              )}
             </div>
             
-            <div className="card p-6">
+            <div className="card p-6 h-full flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
                   <RiTeamLine className="text-white text-sm" />
                 </div>
-                <h2 className="text-xl font-semibold">Candidates ({candidates.length})</h2>
+                <h2 className="text-xl font-semibold">{t('candidates.candidatesList')} ({candidates.length})</h2>
               </div>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                 {loading.candidates ? (
                   <div className="text-center py-8">
                     <div className="loading-spinner mx-auto mb-2"></div>
@@ -534,7 +753,7 @@ export default function Home() {
                 ) : candidates.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <div className="text-4xl mb-2"><RiClipboardLine /></div>
-                    <p>No candidates yet. Create your first candidate!</p>
+                    <p>{t('candidates.noCandidates')}</p>
                   </div>
                 ) : (
                   candidates.map((candidate, index) => (
@@ -544,12 +763,56 @@ export default function Home() {
                           {candidate.name.charAt(0).toUpperCase()}
                         </div>
                         <div className="flex-1">
-                          <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                            {candidate.name}
-                          </h3>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {candidate.email}</p>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                              {candidate.name.startsWith('CV-') ? t('candidates.processing') : candidate.name}
+                            </h3>
+                            {candidate.name.startsWith('CV-') && (
+                              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs rounded-full flex items-center gap-1">
+                                <RiRobotLine className="w-3 h-3" />
+                                {t('candidates.aiProcessing')}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            <RiMailLine className="w-4 h-4" /> 
+                            {candidate.email.includes('@ai-extraction.temp') ? t('candidates.emailPendingExtraction') : candidate.email}
+                          </p>
                           {candidate.phone && (
                             <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiPhoneLine className="w-4 h-4" /> {candidate.phone}</p>
+                          )}
+                          {candidate.cv_url && (
+                            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                              <RiClipboardLine className="w-4 h-4" /> 
+                              <a 
+                                href={candidate.cv_url} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {t('candidates.viewCV')}
+                              </a>
+                            </p>
+                          )}
+                          {candidate.tech_stack && candidate.tech_stack.length > 0 && (
+                            <div className="mt-2">
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tech Stack:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {candidate.tech_stack.slice(0, 3).map((tech, idx) => (
+                                  <span 
+                                    key={idx}
+                                    className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full"
+                                  >
+                                    {tech}
+                                  </span>
+                                ))}
+                                {candidate.tech_stack.length > 3 && (
+                                  <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
+                                    +{candidate.tech_stack.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -562,24 +825,24 @@ export default function Home() {
         )}
 
         {activeTab === 'meets' && (
-          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-            <div className="card p-6">
+          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
+            <div className="card p-6 h-full flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                   <RiCalendarLine className="text-white text-sm" />
                 </div>
-                <h2 className="text-xl font-semibold">Schedule Interview</h2>
+                <h2 className="text-xl font-semibold">{t('interviews.scheduleInterview')}</h2>
               </div>
               <form onSubmit={createMeet} className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">Select Candidate</label>
+                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">{t('interviews.selectCandidate')}</label>
                   <select
                     value={meetForm.candidate_id}
                     onChange={(e) => setMeetForm({ ...meetForm, candidate_id: e.target.value })}
                     className="w-full h-12 p-3 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring"
                     required
                   >
-                    <option value="" disabled>Choose a candidate...</option>
+                    <option value="" disabled>{t('interviews.chooseCandidate')}</option>
                     {candidates.map((candidate) => (
                       <option key={candidate.id} value={candidate.id}>
                         <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {candidate.name} - {candidate.email}</span>
@@ -622,23 +885,23 @@ export default function Home() {
                   {loading.createMeet ? (
                     <div className="flex items-center gap-2">
                       <div className="loading-spinner"></div>
-                      Scheduling...
+                      {t('common.loading')}
                     </div>
                   ) : (
-                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Schedule Interview</span>
+                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> {t('interviews.scheduleInterview')}</span>
                   )}
                 </Button>
               </form>
             </div>
             
-            <div className="card p-6">
+            <div className="card p-6 h-full flex flex-col">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-orange-400 to-red-500 rounded-full flex items-center justify-center">
                   <RiClipboardLine className="text-white text-sm" />
                 </div>
-                <h2 className="text-xl font-semibold">Scheduled Interviews ({meets.length})</h2>
+                <h2 className="text-xl font-semibold">{t('interviews.scheduledInterviews')} ({meets.length})</h2>
               </div>
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+              <div className="space-y-4 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                 {loading.meets ? (
                   <div className="text-center py-8">
                     <div className="loading-spinner mx-auto mb-2"></div>
@@ -657,7 +920,7 @@ export default function Home() {
                           <div className="space-y-2">
                             <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                               Interview #{meet.id.slice(0, 8)}
+                               {t('interviews.interviewWith')} #{meet.id.slice(0, 8)}
                             </h3>
                             {meet.candidate && (
                               <div className="space-y-1 text-sm mb-2">
@@ -678,7 +941,7 @@ export default function Home() {
                                   meet.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
                                   meet.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
                                   'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                }`}>{meet.status}</span></span>
+                                }`}>{getStatusText(meet.status)}</span></span>
                               </p>
                               <p className="text-slate-600 dark:text-slate-400 flex items-center gap-2">
                                 <span className="flex items-center gap-1"><RiKeyLine className="w-4 h-4" /> Password: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded font-mono text-slate-900 dark:text-slate-100 font-bold">
@@ -696,7 +959,7 @@ export default function Home() {
                               </p>
                             </div>
                             <div className="mt-2">
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Interview Link:</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{t('interviews.interviewLink')}:</p>
                               <a 
                                 href={meet.link} 
                                 target="_blank" 
@@ -704,7 +967,7 @@ export default function Home() {
                                 className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded transition-colors"
                               >
                                 <RiLinkM className="w-4 h-4" />
-                                Join Interview
+                                {t('interviews.joinInterview')}
                                 <RiExternalLinkLine className="w-3 h-3" />
                               </a>
                             </div>
@@ -729,10 +992,10 @@ export default function Home() {
                             {loading.sendEmail ? (
                               <div className="flex items-center gap-1">
                                 <div className="loading-spinner w-3 h-3"></div>
-                                Sending...
+                                {t('interviews.sending')}
                               </div>
                             ) : (
-                              <span className="flex items-center gap-1"><RiSendPlaneLine className="w-4 h-4" /> Send Link</span>
+                              <span className="flex items-center gap-1"><RiSendPlaneLine className="w-4 h-4" /> {t('interviews.sendLink')}</span>
                             )}
                           </Button>
                           <Button 
@@ -741,7 +1004,7 @@ export default function Home() {
                             onClick={() => handleCopyLink(meet.link)}
                             className="hover:scale-[1.02] transition-transform"
                           >
-                            {copySuccess === meet.link ? <span className="flex items-center gap-1"><RiCheckLine className="w-4 h-4" /> Copied!</span> : <span className="flex items-center gap-1"><RiClipboardLine className="w-4 h-4" /> Copy</span>}
+                            {copySuccess === meet.link ? <span className="flex items-center gap-1"><RiCheckLine className="w-4 h-4" /> {t('interviews.copied')}</span> : <span className="flex items-center gap-1"><RiClipboardLine className="w-4 h-4" /> {t('interviews.copy')}</span>}
                           </Button>
                         </div>
                       </div>
@@ -756,15 +1019,15 @@ export default function Home() {
         {activeTab === 'conversations' && (
           <div className="animate-in h-full w-full">
             {!selectedCandidate ? (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 h-full">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
                 <div className="card p-6 h-full flex flex-col">
                   <div className="flex items-center gap-2 mb-6">
                     <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
                       <RiChat3Line className="text-white text-sm" />
                     </div>
-                    <h2 className="text-xl font-semibold">Candidates with Conversations ({getCandidatesWithConversations().length})</h2>
+                    <h2 className="text-xl font-semibold">{t('conversations.candidatesWithConversations')} ({getCandidatesWithConversations().length})</h2>
                   </div>
-                  <div className="space-y-3 flex-1 overflow-y-auto">
+                  <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                     {loading.conversations ? (
                       <div className="text-center py-8">
                         <div className="loading-spinner mx-auto mb-2"></div>
@@ -773,7 +1036,7 @@ export default function Home() {
                     ) : getCandidatesWithConversations().length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <div className="text-4xl mb-2"><RiChat3Line /></div>
-                        <p>No conversations yet. Candidates will appear here after their interviews.</p>
+                        <p>{t('conversations.noConversations')}</p>
                       </div>
                     ) : (
                       getCandidatesWithConversations().map((candidate, index) => {
@@ -795,7 +1058,7 @@ export default function Home() {
                                 </h3>
                                 <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {candidate.email}</p>
                                 <p className="text-xs text-slate-500 dark:text-slate-500 mt-1">
-                                  <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {candidateConversations.length} conversation{candidateConversations.length !== 1 ? 's' : ''}</span>
+                                  <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {candidateConversations.length} {t('conversations.conversation')}{candidateConversations.length !== 1 ? 's' : ''}</span>
                                 </p>
                               </div>
                               <div className="text-purple-400 group-hover:text-purple-600 transition-colors">
@@ -814,30 +1077,30 @@ export default function Home() {
                     <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
                       <span className="text-white text-sm">ℹ️</span>
                     </div>
-                    <h2 className="text-xl font-semibold">Instructions</h2>
+                    <h2 className="text-xl font-semibold">{t('conversations.instructions')}</h2>
                   </div>
-                  <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400 flex-1 overflow-y-auto">
+                  <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                     <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">How to view conversations:</h4>
+                      <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">{t('conversations.howToView')}</h4>
                       <ol className="list-decimal list-inside space-y-1">
-                        <li>Select a candidate from the left panel</li>
-                        <li>Browse their conversation history</li>
-                        <li>View AI and candidate messages in chat format</li>
-                        <li>Use the back button to return to candidate list</li>
+                        <li>{t('conversations.selectFromPanel')}</li>
+                        <li>{t('conversations.browseHistory')}</li>
+                        <li>{t('conversations.viewMessages')}</li>
+                        <li>{t('conversations.useBackButton')}</li>
                       </ol>
                     </div>
                     <div className="p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                      <h4 className="font-medium text-purple-800 dark:text-purple-300 mb-2">Message types:</h4>
+                      <h4 className="font-medium text-purple-800 dark:text-purple-300 mb-2">{t('conversations.messageTypes')}</h4>
                       <ul className="list-disc list-inside space-y-1">
-                        <li><span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-1 rounded">ai</span> - Messages from the AI interviewer</li>
-                        <li><span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-1 rounded">user</span> - Messages from the candidate</li>
+                        <li><span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-1 rounded">ai</span> - {t('conversations.aiMessages')}</li>
+                        <li><span className="font-mono text-xs bg-slate-200 dark:bg-slate-700 px-1 rounded">user</span> - {t('conversations.userMessages')}</li>
                       </ul>
                     </div>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="w-full">
+              <div className="w-full" style={{ height: 'calc(100vh - 160px)' }}>
                 <div className="card p-6 h-full flex flex-col">
                   <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-3">
@@ -858,26 +1121,26 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="text-sm text-slate-500 dark:text-slate-400">
-                      <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {getCandidateConversations(selectedCandidate.id).length} conversation{getCandidateConversations(selectedCandidate.id).length !== 1 ? 's' : ''}</span>
+                      <span className="flex items-center gap-1"><RiChat3Line className="w-4 h-4" /> {getCandidateConversations(selectedCandidate.id).length} {t('conversations.conversation')}{getCandidateConversations(selectedCandidate.id).length !== 1 ? 's' : ''}</span>
                     </div>
                   </div>
                   
-                  <div className="space-y-6 flex-1 overflow-y-auto">
+                  <div className="space-y-6 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                     {getCandidateConversations(selectedCandidate.id).map((conversation, index) => (
-                      <div key={conversation.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4">
+                      <div key={conversation.id} className="border border-slate-200 dark:border-slate-700 rounded-lg p-4 flex flex-col">
                         <div className="flex items-center gap-2 mb-4">
                           <div className="w-6 h-6 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                             <span className="text-white text-xs font-bold">{index + 1}</span>
                           </div>
                           <h3 className="font-medium text-slate-800 dark:text-slate-200">
-                            Conversation #{conversation.id.slice(0, 8)}
+                            {t('conversations.conversation')} #{conversation.id.slice(0, 8)}
                           </h3>
                           <span className="text-xs text-slate-500 dark:text-slate-400">
                             {new Date(conversation.created_at).toLocaleDateString()} {new Date(conversation.created_at).toLocaleTimeString()}
                           </span>
                         </div>
                         
-                        <div className="space-y-3 max-h-80 overflow-y-auto">
+                        <div className="space-y-3 flex-1 overflow-y-auto">
                           {Array.isArray(conversation.conversation_data) && conversation.conversation_data.length > 0 ? (
                             conversation.conversation_data.map((message: { source: string; message: string }, msgIndex: number) => (
                               <div 
@@ -895,7 +1158,7 @@ export default function Home() {
                                     <span className={`text-xs font-medium ${
                                       message.source === 'user' ? 'text-blue-100' : 'text-slate-600 dark:text-slate-400'
                                     }`}>
-                                      {message.source === 'user' ? <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> Candidate</span> : <span className="flex items-center gap-1"><RiRobotLine className="w-4 h-4" /> AI Interviewer</span>}
+                                      {message.source === 'user' ? <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {t('conversations.candidate')}</span> : <span className="flex items-center gap-1"><RiRobotLine className="w-4 h-4" /> {t('conversations.aiInterviewer')}</span>}
                                     </span>
                                   </div>
                                   <p className="text-sm whitespace-pre-wrap">{message.message}</p>
@@ -932,12 +1195,12 @@ export default function Home() {
                   <div className="w-8 h-8 bg-gradient-to-r from-orange-400 to-red-500 rounded-full flex items-center justify-center">
                     <RiFolderLine className="text-white text-sm font-bold" />
                   </div>
-                  <h2 className="text-xl font-semibold">Bulk Upload Candidates</h2>
+                  <h2 className="text-xl font-semibold">{t('bulkUpload.bulkUploadCandidates')}</h2>
                 </div>
                 <form onSubmit={handleBulkUpload} className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
-                      Upload File (CSV or TXT)
+                      {t('bulkUpload.uploadFile')}
                     </label>
                     <input
                       type="file"
@@ -947,7 +1210,7 @@ export default function Home() {
                       required
                     />
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                      Supported formats: CSV (.csv) and plain text (.txt)
+                      {t('bulkUpload.supportedFormats')}
                     </p>
                   </div>
                   <Button 
@@ -958,10 +1221,10 @@ export default function Home() {
                     {loading.bulkUpload ? (
                       <div className="flex items-center gap-2">
                         <div className="loading-spinner"></div>
-                        Uploading...
+                        {t('bulkUpload.uploading')}
                       </div>
                     ) : (
-                      <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Upload Candidates</span>
+                      <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> {t('bulkUpload.uploadCandidates')}</span>
                     )}
                   </Button>
                 </form>
@@ -972,35 +1235,33 @@ export default function Home() {
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
                     <span className="text-white text-sm">ℹ️</span>
                   </div>
-                  <h2 className="text-xl font-semibold">File Format Instructions</h2>
+                  <h2 className="text-xl font-semibold">{t('bulkUpload.fileFormatInstructions')}</h2>
                 </div>
                 <div className="space-y-4 text-sm text-slate-600 dark:text-slate-400">
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">CSV Format:</h4>
+                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">{t('bulkUpload.csvFormat')}</h4>
                     <code className="block text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded mb-2">
-                      Name,Email,Phone<br/>
-                      John Doe,john@example.com,+1234567890<br/>
-                      Jane Smith,jane@example.com,+0987654321
+                      {t('bulkUpload.csvExample')}
                     </code>
-                    <p className="text-xs">Header row is optional. Phone number is optional.</p>
+                    <p className="text-xs">{t('bulkUpload.headerOptional')}</p>
                   </div>
                   <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">TXT Format Options:</h4>
+                    <h4 className="font-medium text-green-800 dark:text-green-300 mb-2">{t('bulkUpload.txtFormatOptions')}</h4>
                     <div className="space-y-2">
                       <div>
-                        <p className="text-xs font-medium mb-1">Format 1 - Comma separated:</p>
+                        <p className="text-xs font-medium mb-1">{t('bulkUpload.commaSeparated')}</p>
                         <code className="block text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded">
                           John Doe,john@example.com,+1234567890
                         </code>
                       </div>
                       <div>
-                        <p className="text-xs font-medium mb-1">Format 2 - Angle brackets:</p>
+                        <p className="text-xs font-medium mb-1">{t('bulkUpload.angleBrackets')}</p>
                         <code className="block text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded">
                           John Doe &lt;john@example.com&gt; +1234567890
                         </code>
                       </div>
                       <div>
-                        <p className="text-xs font-medium mb-1">Format 3 - Space separated:</p>
+                        <p className="text-xs font-medium mb-1">{t('bulkUpload.spaceSeparated')}</p>
                         <code className="block text-xs bg-slate-100 dark:bg-slate-800 p-1 rounded">
                           John Doe john@example.com +1234567890
                         </code>
@@ -1008,13 +1269,13 @@ export default function Home() {
                     </div>
                   </div>
                   <div className="p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
-                    <h4 className="font-medium text-yellow-800 dark:text-yellow-300 mb-2">Important Notes:</h4>
+                    <h4 className="font-medium text-yellow-800 dark:text-yellow-300 mb-2">{t('bulkUpload.importantNotes')}</h4>
                     <ul className="list-disc list-inside space-y-1 text-xs">
-                      <li>Name and email are required fields</li>
-                      <li>Phone number is optional</li>
-                      <li>Duplicate emails will be skipped</li>
-                      <li>Invalid email formats will be rejected</li>
-                      <li>Empty lines will be ignored</li>
+                      <li>{t('bulkUpload.nameEmailRequired')}</li>
+                      <li>{t('bulkUpload.phoneOptional')}</li>
+                      <li>{t('bulkUpload.duplicatesSkipped')}</li>
+                      <li>{t('bulkUpload.invalidEmailsRejected')}</li>
+                      <li>{t('bulkUpload.emptyLinesIgnored')}</li>
                     </ul>
                   </div>
                 </div>
@@ -1030,14 +1291,13 @@ export default function Home() {
                 <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-indigo-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm">⚙️</span>
                 </div>
-                <h2 className="text-xl font-semibold">AI Analysis Process</h2>
+                <h2 className="text-xl font-semibold">{t('processes.aiAnalysisProcess')}</h2>
               </div>
               <div className="space-y-6">
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
                   <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Process Description</h4>
                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                    Execute AI analysis on interview data using the multiagent system. 
-                    This process will analyze candidate conversations and provide insights.
+                    {t('processes.processDescription')}
                   </p>
                 </div>
                 <Button 
@@ -1048,10 +1308,10 @@ export default function Home() {
                   {loading.analyzeProcess ? (
                     <div className="flex items-center gap-2">
                       <div className="loading-spinner"></div>
-                      Analyzing...
+                      {t('processes.analyzing')}
                     </div>
                   ) : (
-                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> Execute Analysis</span>
+                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> {t('processes.executeAnalysis')}</span>
                   )}
                 </Button>
               </div>
@@ -1061,75 +1321,75 @@ export default function Home() {
 
         {activeTab === 'agents' && (
           <div className="animate-in h-full w-full">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 h-full">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
               {/* Create Agent Form */}
               <div className="card p-6 h-full flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
                   <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
                     <RiRobotLine className="text-white text-sm" />
                   </div>
-                  <h2 className="text-xl font-semibold">Create New Agent</h2>
+                  <h2 className="text-xl font-semibold">{t('agents.createNewAgent')}</h2>
                 </div>
                 <form onSubmit={createAgent} className="space-y-6 flex-1">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Agent ID *
+                      {t('agents.agentID')} *
                     </label>
                     <Input
                       type="text"
                       value={agentForm.agent_id}
                       onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
-                      placeholder="e.g., agent-001, dev-agent-v1"
+                      placeholder={t('agents.agentID')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Agent Name *
+                      {t('agents.agentName')} *
                     </label>
                     <Input
                       type="text"
                       value={agentForm.name}
                       onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
-                      placeholder="e.g., Frontend Developer Agent"
+                      placeholder={t('agents.agentName')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Tech Stack *
+                      {t('agents.techStack')} *
                     </label>
                     <Input
                       type="text"
                       value={agentForm.tech_stack}
                       onChange={(e) => setAgentForm({ ...agentForm, tech_stack: e.target.value })}
-                      placeholder="e.g., React, TypeScript, Node.js"
+                      placeholder={t('agents.techStack')}
                       required
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Description
+                      {t('agents.description')}
                     </label>
                     <textarea
                       className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                       rows={3}
                       value={agentForm.description}
                       onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
-                      placeholder="Agent description and capabilities"
+                      placeholder={t('agents.description')}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      Status
+                      {t('agents.status')}
                     </label>
                     <select
                       className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                       value={agentForm.status}
                       onChange={(e) => setAgentForm({ ...agentForm, status: e.target.value as 'active' | 'inactive' })}
                     >
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
+                      <option value="active">{t('agents.active')}</option>
+                      <option value="inactive">{t('agents.inactive')}</option>
                     </select>
                   </div>
                   <Button 
@@ -1140,10 +1400,10 @@ export default function Home() {
                     {loading.createAgent ? (
                       <div className="flex items-center gap-2">
                         <div className="loading-spinner"></div>
-                        Creating...
+                        {t('agents.creating')}
                       </div>
                     ) : (
-                      <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> Create Agent</span>
+                      <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> {t('agents.createAgent')}</span>
                     )}
                   </Button>
                 </form>
@@ -1155,9 +1415,9 @@ export default function Home() {
                   <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
                     <RiRobotLine className="text-white text-sm" />
                   </div>
-                  <h2 className="text-xl font-semibold">Agents ({agents.length})</h2>
+                  <h2 className="text-xl font-semibold">{t('agents.agentsList')} ({agents.length})</h2>
                 </div>
-                <div className="space-y-3 flex-1 overflow-y-auto">
+                <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                   {loading.agents ? (
                     <div className="text-center py-8">
                       <div className="loading-spinner mx-auto mb-2"></div>
@@ -1166,7 +1426,7 @@ export default function Home() {
                   ) : agents.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <div className="text-4xl mb-2"><RiRobotLine /></div>
-                      <p>No agents yet. Create your first agent!</p>
+                      <p>{t('agents.noAgents')}</p>
                     </div>
                   ) : (
                     agents.map((agent, index) => (
@@ -1182,7 +1442,7 @@ export default function Home() {
                                   ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
                                   : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
                               }`}>
-                                {agent.status}
+                                {agent.status === 'active' ? t('agents.active') : t('agents.inactive')}
                               </span>
                             </div>
                             <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
@@ -1220,7 +1480,7 @@ export default function Home() {
             {loading.meetsByJdInterviews ? (
               <div className="text-center py-8">
                 <div className="loading-spinner mx-auto mb-2"></div>
-                <p className="text-muted-foreground">Loading reports data...</p>
+                <p className="text-muted-foreground">{t('reports.loadingReports')}</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -1229,7 +1489,7 @@ export default function Home() {
                   <div className="card p-6 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border-blue-200 dark:border-blue-700">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">Total Interviews</p>
+                        <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{t('reports.totalInterviews')}</p>
                         <p className="text-3xl font-bold text-blue-900 dark:text-blue-100">{getTotalMeets()}</p>
                       </div>
                       <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center">
@@ -1241,9 +1501,9 @@ export default function Home() {
                   <div className="card p-6 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border-green-200 dark:border-green-700">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-green-600 dark:text-green-400">Completed</p>
+                        <p className="text-sm font-medium text-green-600 dark:text-green-400">{t('reports.completed')}</p>
                         <p className="text-3xl font-bold text-green-900 dark:text-green-100">{getOverallStatusCounts().completed || 0}</p>
-                        <p className="text-xs text-green-600 dark:text-green-400">{getStatusPercentage('completed', getTotalMeets())}% of total</p>
+                        <p className="text-xs text-green-600 dark:text-green-400">{getStatusPercentage('completed', getTotalMeets())}% {t('reports.ofTotal')}</p>
                       </div>
                       <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
                         <RiCheckLine className="w-6 h-6 text-white" />
@@ -1254,9 +1514,9 @@ export default function Home() {
                   <div className="card p-6 bg-gradient-to-r from-yellow-50 to-yellow-100 dark:from-yellow-900/20 dark:to-yellow-800/20 border-yellow-200 dark:border-yellow-700">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">Pending</p>
+                        <p className="text-sm font-medium text-yellow-600 dark:text-yellow-400">{t('reports.pending')}</p>
                         <p className="text-3xl font-bold text-yellow-900 dark:text-yellow-100">{getOverallStatusCounts().pending || 0}</p>
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400">{getStatusPercentage('pending', getTotalMeets())}% of total</p>
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400">{getStatusPercentage('pending', getTotalMeets())}% {t('reports.ofTotal')}</p>
                       </div>
                       <div className="w-12 h-12 bg-yellow-500 rounded-full flex items-center justify-center">
                         <RiClipboardLine className="w-6 h-6 text-white" />
@@ -1267,7 +1527,7 @@ export default function Home() {
                   <div className="card p-6 bg-gradient-to-r from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20 border-purple-200 dark:border-purple-700">
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm font-medium text-purple-600 dark:text-purple-400">JD Templates</p>
+                        <p className="text-sm font-medium text-purple-600 dark:text-purple-400">{t('reports.jdTemplates')}</p>
                         <p className="text-3xl font-bold text-purple-900 dark:text-purple-100">{meetsByJdInterviews.length}</p>
                       </div>
                       <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
@@ -1282,7 +1542,7 @@ export default function Home() {
                   <div className="flex items-center justify-between">
                     <h2 className="text-2xl font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                       <RiBarChartLine className="w-6 h-6" />
-                      Interview Analytics by Job Description
+                      {t('reports.interviewAnalyticsByJD')}
                     </h2>
                     {meetsByJdInterviews.length > 0 && (
                       <Button
@@ -1294,12 +1554,12 @@ export default function Home() {
                         {expandedReports.size === meetsByJdInterviews.length ? (
                           <>
                             <RiArrowUpSLine className="w-4 h-4" />
-                            Collapse All
+                            {t('reports.collapseAll')}
                           </>
                         ) : (
                           <>
                             <RiArrowDownSLine className="w-4 h-4" />
-                            Expand All
+                            {t('reports.expandAll')}
                           </>
                         )}
                       </Button>
@@ -1335,14 +1595,14 @@ export default function Home() {
                                     {group.jd_interview.interview_name}
                                   </h3>
                                   <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    Agent: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">{group.jd_interview.agent_id}</span>
+                                    {t('reports.agent')}: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-1 rounded">{group.jd_interview.agent_id}</span>
                                   </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-4">
                                 <div className="text-right">
                                   <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">{totalMeetsInGroup}</p>
-                                  <p className="text-sm text-slate-600 dark:text-slate-400">Total Interviews</p>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">{t('reports.totalInterviewsInGroup')}</p>
                                 </div>
                                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 transition-transform duration-200">
                                   {isExpanded ? (
@@ -1379,7 +1639,7 @@ export default function Home() {
                               <div>
                                 <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
                                   <RiUserLine className="w-4 h-4" />
-                                  Recent Interviews ({group.meets.length})
+                                  {t('reports.recentInterviews')} ({group.meets.length})
                                 </h4>
                                 <div className="space-y-2 max-h-60 overflow-y-auto">
                                   {group.meets.slice(0, 5).map((meet) => (
@@ -1399,7 +1659,7 @@ export default function Home() {
                                       </div>
                                       <div className="text-right">
                                         <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(meet.status)}`}>
-                                          {meet.status}
+                                          {getStatusText(meet.status)}
                                         </span>
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
                                           {new Date(meet.created_at).toLocaleDateString()}
@@ -1409,7 +1669,7 @@ export default function Home() {
                                   ))}
                                   {group.meets.length > 5 && (
                                     <p className="text-center text-sm text-slate-500 dark:text-slate-400 py-2">
-                                      ... and {group.meets.length - 5} more interviews
+                                      ... and {group.meets.length - 5} {t('reports.moreInterviews')}
                                     </p>
                                   )}
                                 </div>
@@ -1418,7 +1678,7 @@ export default function Home() {
 
                             {/* Job Description Preview */}
                             <div className="border-t border-slate-200 dark:border-slate-700 pt-4">
-                              <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-2">Job Description Preview</h4>
+                              <h4 className="font-medium text-slate-700 dark:text-slate-300 mb-2">{t('reports.jobDescriptionPreview')}</h4>
                               <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 max-h-32 overflow-y-auto">
                                 <p className="text-sm text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
                                   {group.jd_interview.job_description.length > 200 

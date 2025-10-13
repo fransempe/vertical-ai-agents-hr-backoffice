@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Sidebar } from './Sidebar';
 import { Navbar } from './Navbar';
+import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     const handleResize = () => {
@@ -26,22 +28,22 @@ export function DashboardLayout({ children, activeTab, onTabChange }: DashboardL
 
   const getTitleForTab = (tab: string) => {
     switch (tab) {
-      case 'candidates':
-        return 'Candidate Management';
-      case 'meets':
-        return 'Interview Scheduling';
-      case 'conversations':
-        return 'Interview Conversations';
-      case 'bulk-upload':
-        return 'Bulk Upload Candidates';
-      case 'processes':
-        return 'AI Analysis Processes';
-      case 'agents':
-        return 'Agent Management';
       case 'reports':
-        return 'Interview Reports & Analytics';
+        return t('titles.reports');
+      case 'candidates':
+        return t('titles.candidates');
+      case 'meets':
+        return t('titles.interviews');
+      case 'conversations':
+        return t('titles.conversations');
+      case 'bulk-upload':
+        return t('titles.bulkUpload');
+      case 'processes':
+        return t('titles.processes');
+      case 'agents':
+        return t('titles.agents');
       default:
-        return 'HR Interview Dashboard';
+        return t('titles.dashboard');
     }
   };
 

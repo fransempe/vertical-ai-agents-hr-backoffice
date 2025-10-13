@@ -4,6 +4,8 @@ export interface Candidate {
   name: string;
   email: string;
   phone?: string;
+  cv_url?: string;
+  tech_stack?: string[];
   created_at: string;
   updated_at: string;
 }
@@ -59,7 +61,7 @@ export interface JdInterview {
 export interface DatabaseProvider {
 
   // Candidates
-  createCandidate(candidate: Omit<Candidate, 'id' | 'created_at' | 'updated_at'>): Promise<Candidate>;
+  createCandidate(candidate: Omit<Candidate, 'id' | 'created_at' | 'updated_at' | 'tech_stack'>): Promise<Candidate>;
   getCandidates(): Promise<Candidate[]>;
   getCandidate(id: string): Promise<Candidate | null>;
   updateCandidate(id: string, updates: Partial<Candidate>): Promise<Candidate>;
