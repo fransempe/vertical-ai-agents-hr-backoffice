@@ -81,16 +81,11 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Generate filename with date, time and candidate name
+    // Generate filename with format: 2025-10-15T18-54-34-cv1760554474499.pdf
     const now = new Date();
     const dateTime = now.toISOString().replace(/[:.]/g, '-').slice(0, 19); // YYYY-MM-DDTHH-MM-SS
-    const sanitizedName = candidateName
-      .toLowerCase()
-      .replace(/[^a-z0-9\s]/g, '') // Remove special characters
-      .replace(/\s+/g, '-') // Replace spaces with hyphens
-      .substring(0, 50); // Limit length
     const fileExtension = file.name.split('.').pop();
-    const fileName = `cvs/${dateTime}-${sanitizedName}.${fileExtension}`;
+    const fileName = `cvs/${dateTime}-${candidateName}.${fileExtension}`;
 
     // Convert file to buffer
     const buffer = Buffer.from(await file.arrayBuffer());
@@ -109,10 +104,14 @@ export async function POST(request: NextRequest) {
     // Generate the public URL
     const fileUrl = `https://${bucketName}.s3.${region}.amazonaws.com/${fileName}`;
 
+    // Extract just the filename without the 'cvs/' prefix
+    const generatedFileName = fileName.replace('cvs/', '');
+    
     return NextResponse.json(
       { 
         url: fileUrl,
-        fileName: file.name,
+        fileName: generatedFileName, // Return the generated filename: 2025-10-15T18-54-34-cv1760554474499.pdf
+        originalName: file.name,
         size: file.size,
         type: file.type
       },

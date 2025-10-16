@@ -27,7 +27,8 @@ import {
   RiStarLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
-  RiUploadLine
+  RiUploadLine,
+  RiMagicLine
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -35,6 +36,15 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 export default function Home() {
   const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports'>('reports');
+  
+  // Available technologies for multi-select
+  const availableTechnologies = [
+    'React', 'Angular', 'Vue.js', 'JavaScript', 'TypeScript',
+    'Node.js', 'Python', 'Java', 'C#', 'PHP',
+    'Go', 'Rust', 'Swift', 'Kotlin', 'Flutter',
+    'React Native', 'MongoDB', 'PostgreSQL', 'MySQL',
+    'AWS', 'Azure', 'Docker', 'Kubernetes', 'Git'
+  ];
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -43,14 +53,14 @@ export default function Home() {
   const [meetsByJdInterviews, setMeetsByJdInterviews] = useState<{ jd_interview: JdInterview; meets: Meet[] }[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
-  const [candidateCreationTab, setCandidateCreationTab] = useState<'manual' | 'cv'>('manual');
+  const [candidateCreationTab, setCandidateCreationTab] = useState<'manual' | 'cv'>('cv');
   const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '' });
-  const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null });
+  const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null, tech_stack: [] as string[] });
   const [cvOnlyForm, setCvOnlyForm] = useState({ cv_file: null as File | null });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false, processingCV: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -164,7 +174,7 @@ export default function Home() {
 
 
 
-  const uploadCV = async (file: File, candidateName: string): Promise<string | null> => {
+  const uploadCV = async (file: File, candidateName: string): Promise<{ url: string; fileName: string } | null> => {
     setLoading(prev => ({ ...prev, uploadCV: true }));
     try {
       const formData = new FormData();
@@ -178,7 +188,7 @@ export default function Home() {
 
       if (response.ok) {
         const data = await response.json();
-        return data.url;
+        return { url: data.url, fileName: data.fileName };
       } else {
         const errorData = await response.json();
         setToast({ message: errorData.error || 'Failed to upload CV', type: 'error' });
@@ -205,11 +215,12 @@ export default function Home() {
           setToast({ message: 'Candidate name is required to upload CV', type: 'error' });
           return;
         }
-        cv_url = await uploadCV(candidateForm.cv_file, candidateForm.name);
-        if (!cv_url) {
+        const uploadResult = await uploadCV(candidateForm.cv_file, candidateForm.name);
+        if (!uploadResult) {
           // If CV upload failed, don't create candidate
           return;
         }
+        cv_url = uploadResult.url;
       }
 
       // Create candidate data
@@ -217,6 +228,7 @@ export default function Home() {
         name: candidateForm.name,
         email: candidateForm.email,
         phone: candidateForm.phone,
+        tech_stack: candidateForm.tech_stack,
         ...(cv_url && { cv_url })
       };
 
@@ -227,7 +239,7 @@ export default function Home() {
       });
       
       if (response.ok) {
-        setCandidateForm({ name: '', email: '', phone: '', cv_file: null });
+        setCandidateForm({ name: '', email: '', phone: '', cv_file: null, tech_stack: [] });
         fetchCandidates();
         setToast({ message: 'Candidate created successfully!', type: 'success' });
         
@@ -256,23 +268,25 @@ export default function Home() {
 
       // Generate a unique filename for the CV
       const timestamp = Date.now();
-      const tempName = `CV-${timestamp}`;
-      const cv_url = await uploadCV(cvOnlyForm.cv_file, tempName);
+      const tempName = `cv${timestamp}`;
+      const uploadResult = await uploadCV(cvOnlyForm.cv_file, tempName);
       
-      if (!cv_url) {
+      if (!uploadResult) {
         return;
       }
 
-      // Only upload the CV, don't create any candidate
+      // Reset form and file input immediately after upload
       setCvOnlyForm({ cv_file: null });
-      setToast({ 
-        message: 'CV uploaded successfully! The file will be processed by another system.', 
-        type: 'success' 
-      });
-      
-      // Reset file input
       const fileInput = document.querySelector('input[type="file"][id="cv-only-upload"]') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
+      
+      setToast({ 
+        message: 'CV uploaded successfully! Starting AI processing...', 
+        type: 'success' 
+      });
+
+      // Start background processing with the correct filename
+      processCV(uploadResult.url, uploadResult.fileName);
       
     } catch (error) {
       console.error('Error uploading CV:', error);
@@ -281,6 +295,37 @@ export default function Home() {
       setLoading(prev => ({ ...prev, createCandidate: false }));
     }
   };
+
+  const processCV = async (cv_url: string, filename: string) => {
+    setLoading(prev => ({ ...prev, processingCV: true }));
+    try {
+      const response = await fetch('/api/read-cv', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cv_url, filename }),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        setToast({ 
+          message: 'CV processing started! The external system will handle candidate creation.', 
+          type: 'info' 
+        });
+      } else {
+        const error = await response.json();
+        setToast({ 
+          message: `Failed to start CV processing: ${error.error}`, 
+          type: 'error' 
+        });
+      }
+    } catch (error) {
+      console.error('Error processing CV:', error);
+      setToast({ message: 'Failed to start CV processing', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, processingCV: false }));
+    }
+  };
+
 
   const createMeet = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -586,6 +631,19 @@ export default function Home() {
               {/* Tab Navigation */}
               <div className="flex mb-6 bg-slate-100 dark:bg-slate-800 rounded-lg p-1">
                 <button
+                  onClick={() => setCandidateCreationTab('cv')}
+                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
+                    candidateCreationTab === 'cv'
+                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  <span className="flex items-center gap-2 justify-center">
+                    <RiMagicLine className="w-4 h-4" />
+                    {t('candidates.uploadCVWithAI')}
+                  </span>
+                </button>
+                <button
                   onClick={() => setCandidateCreationTab('manual')}
                   className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
                     candidateCreationTab === 'manual'
@@ -596,19 +654,6 @@ export default function Home() {
                   <span className="flex items-center gap-2 justify-center">
                     <RiUserLine className="w-4 h-4" />
                     {t('candidates.manualEntry')}
-                  </span>
-                </button>
-                <button
-                  onClick={() => setCandidateCreationTab('cv')}
-                  className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-                    candidateCreationTab === 'cv'
-                      ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`}
-                >
-                  <span className="flex items-center gap-2 justify-center">
-                    <RiClipboardLine className="w-4 h-4" />
-                    {t('candidates.uploadCV')}
                   </span>
                 </button>
               </div>
@@ -646,6 +691,65 @@ export default function Home() {
                       className="h-12 transition-all focus:scale-[1.02]"
                     />
                   </div>
+                  
+                  {/* Tech Stack Multi-Select */}
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
+                      {t('candidates.techStack')} <span className="text-slate-500">({t('common.optional')})</span>
+                    </label>
+                    <div className="border border-slate-300 dark:border-slate-600 rounded-md p-3 bg-white dark:bg-slate-700 max-h-32 overflow-y-auto">
+                      <div className="flex flex-wrap gap-2">
+                        {availableTechnologies.map((tech) => (
+                          <label key={tech} className="flex items-center space-x-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={candidateForm.tech_stack.includes(tech)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setCandidateForm({
+                                    ...candidateForm,
+                                    tech_stack: [...candidateForm.tech_stack, tech]
+                                  });
+                                } else {
+                                  setCandidateForm({
+                                    ...candidateForm,
+                                    tech_stack: candidateForm.tech_stack.filter(t => t !== tech)
+                                  });
+                                }
+                              }}
+                              className="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-slate-700 dark:text-slate-300">{tech}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    {candidateForm.tech_stack.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1">
+                        {candidateForm.tech_stack.map((tech) => (
+                          <span
+                            key={tech}
+                            className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          >
+                            {tech}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCandidateForm({
+                                  ...candidateForm,
+                                  tech_stack: candidateForm.tech_stack.filter(t => t !== tech)
+                                });
+                              }}
+                              className="ml-1 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200"
+                            >
+                              ×
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  
                   <div>
                     <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
                       {t('candidates.cvResume')} <span className="text-slate-500">({t('common.optional')})</span>
@@ -721,13 +825,18 @@ export default function Home() {
 
                   <Button 
                     type="submit" 
-                    disabled={loading.createCandidate || !cvOnlyForm.cv_file}
+                    disabled={loading.createCandidate || loading.processingCV || !cvOnlyForm.cv_file}
                     className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {loading.createCandidate || loading.uploadCV ? (
+                    {loading.createCandidate ? (
                       <div className="flex items-center gap-2">
                         <div className="loading-spinner"></div>
-                        {loading.uploadCV ? 'Uploading...' : 'Uploading...'}
+                        Uploading...
+                      </div>
+                    ) : loading.processingCV ? (
+                      <div className="flex items-center gap-2">
+                        <div className="loading-spinner"></div>
+                        Processing...
                       </div>
                     ) : (
                       <span className="flex items-center gap-1"><RiUploadLine className="w-4 h-4" /> Upload CV</span>
@@ -743,6 +852,12 @@ export default function Home() {
                   <RiTeamLine className="text-white text-sm" />
                 </div>
                 <h2 className="text-xl font-semibold">{t('candidates.candidatesList')} ({candidates.length})</h2>
+                {loading.processingCV && (
+                  <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
+                    <div className="loading-spinner w-4 h-4"></div>
+                    <span>Processing CV in background...</span>
+                  </div>
+                )}
               </div>
               <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
                 {loading.candidates ? (

@@ -27,7 +27,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, email, phone, cv_url } = body;
+    const { name, email, phone, cv_url, tech_stack } = body;
 
     if (!name || !email) {
       return NextResponse.json({ error: 'Name and email are required' }, { status: 400, headers: corsHeaders });
@@ -37,7 +37,8 @@ export async function POST(request: NextRequest) {
       name,
       email,
       ...(phone && { phone }),
-      ...(cv_url && { cv_url })
+      ...(cv_url && { cv_url }),
+      ...(tech_stack && { tech_stack })
     };
 
     const candidate = await db.createCandidate(candidateData);
