@@ -306,7 +306,7 @@ export default function Home() {
       });
 
       if (response.ok) {
-        const result = await response.json();
+        await response.json(); // Consume response but don't store it
         setToast({ 
           message: 'CV processing started! The external system will handle candidate creation.', 
           type: 'info' 
