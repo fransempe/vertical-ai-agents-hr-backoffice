@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 
 interface ToastProps {
   message: string;
-  type?: 'success' | 'error' | 'info';
+  type?: 'success' | 'error' | 'info' | 'warning';
   duration?: number;
   onClose?: () => void;
 }
@@ -25,6 +25,8 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
         return 'bg-green-500 text-white';
       case 'error':
         return 'bg-red-500 text-white';
+      case 'warning':
+        return 'bg-yellow-500 text-white';
       default:
         return 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-800';
     }
@@ -39,6 +41,7 @@ export function Toast({ message, type = 'info', duration = 3000, onClose }: Toas
       <div className="flex items-center gap-2">
         {type === 'success' && <span>✅</span>}
         {type === 'error' && <span>❌</span>}
+        {type === 'warning' && <span>⚠️</span>}
         {type === 'info' && <span>ℹ️</span>}
         <span className="text-sm font-medium">{message}</span>
       </div>

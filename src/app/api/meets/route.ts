@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
+    const candidateId = searchParams.get('candidate_id');
 
     if (token) {
       const meet = await db.getMeetByToken(token);
@@ -25,6 +26,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Meet not found' }, { status: 404, headers: corsHeaders });
       }
       return NextResponse.json(meet, { headers: corsHeaders });
+    }
+
+    // If candidate_id is provided, filter meets by candidate
+    if (candidateId) {
+      const meets = await db.getMeets();
+      const candidateMeets = meets.filter(meet => meet.candidate_id === candidateId);
+      return NextResponse.json(candidateMeets, { headers: corsHeaders });
     }
 
     const meets = await db.getMeets();

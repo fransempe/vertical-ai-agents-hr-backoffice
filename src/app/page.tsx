@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
@@ -13,25 +14,26 @@ import {
   RiTeamLine,
   RiClipboardLine,
   RiMailLine,
-  RiPhoneLine,
   RiCalendarLine,
   RiBarChartLine,
-  RiKeyLine,
   RiCheckLine,
   RiChat3Line,
   RiRobotLine,
   RiRocketLine,
   RiFolderLine,
-  RiSendPlaneLine,
   RiArrowRightSLine,
   RiStarLine,
   RiArrowDownSLine,
   RiArrowUpSLine,
   RiUploadLine,
-  RiMagicLine
+  RiMagicLine,
+  RiCalendarEventLine,
+  RiCalendarCheckLine,
+  RiInformationLine
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
+import { BodyCreateAgentV1ConvaiAgentsCreatePost } from '@elevenlabs/elevenlabs-js/api/resources/conversationalAi/resources/agents/client/requests/BodyCreateAgentV1ConvaiAgentsCreatePost';
 
 export default function Home() {
   const { t } = useLanguage();
@@ -54,15 +56,28 @@ export default function Home() {
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const [candidateCreationTab, setCandidateCreationTab] = useState<'manual' | 'cv'>('cv');
-  const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '' });
+  const [interviewSchedulingTab, setInterviewSchedulingTab] = useState<'ai' | 'manual'>('ai');
+  const [scheduledInterviewsCollapsed, setScheduledInterviewsCollapsed] = useState(false);
+  const [aiMatches, setAiMatches] = useState<Array<{
+    id: string;
+    candidate: { name: string; email: string; tech_stack?: string[] };
+    jd_interview: { interview_name: string; agent_id: string; id: string };
+    match_score: number;
+    match_analysis: string;
+  }>>([]);
+  const [showAiMatches, setShowAiMatches] = useState(false);
+  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
+  const [selectedJdInterviewForProcess, setSelectedJdInterviewForProcess] = useState<string>('');
+  const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '', scheduled_at: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null, tech_stack: [] as string[] });
   const [cvOnlyForm, setCvOnlyForm] = useState({ cv_file: null as File | null });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
+  const [elevenLabsForm, setElevenLabsForm] = useState({ name: '', prompt: '', firstMessage: '', additionalConfig: '' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false, processingCV: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false, processingCV: false, aiMatching: false, createElevenLabsAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -342,8 +357,8 @@ export default function Home() {
         body: JSON.stringify(meetData),
       });
       
-      if (response.ok) {
-        setMeetForm({ candidate_id: '', jd_interviews_id: '' });
+      if (response.ok) {    
+        setMeetForm({ candidate_id: '', jd_interviews_id: '', scheduled_at: '' });
         fetchMeets();
         setToast({ message: 'Interview scheduled successfully!', type: 'success' });
       } else {
@@ -476,22 +491,51 @@ export default function Home() {
     );
   };
 
+  const checkExistingInterview = async (candidateId: string) => {
+    try {
+      const response = await fetch(`/api/meets?candidate_id=${candidateId}`);
+      if (response.ok) {
+        const meets = await response.json();
+        return meets.length > 0;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error checking existing interviews:', error);
+      return false;
+    }
+  };
+
   const executeAnalysis = async () => {
     setLoading(prev => ({ ...prev, analyzeProcess: true }));
     try {
+      const requestBody = selectedJdInterviewForProcess 
+        ? { jd_interview_id: selectedJdInterviewForProcess }
+        : {};
+        
       const response = await fetch('/api/processes/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify(requestBody),
       });
       
       const result = await response.json();
       
       if (response.ok) {
+        const selectedJdName = selectedJdInterviewForProcess 
+          ? jdInterviews.find(jd => jd.id === selectedJdInterviewForProcess)?.interview_name 
+          : null;
+        
+        const message = selectedJdName 
+          ? `Análisis completado para "${selectedJdName}" en ${result.execution_time || 'N/A'}`
+          : `Análisis completado exitosamente en ${result.execution_time || 'N/A'}`;
+          
         setToast({ 
-          message: `Analysis completed successfully in ${result.execution_time || 'N/A'}`,
+          message,
           type: 'success' 
         });
+        
+        // Reset the selector after successful analysis
+        setSelectedJdInterviewForProcess('');
       } else {
         setToast({ 
           message: result.error || 'Analysis failed',
@@ -613,14 +657,148 @@ export default function Home() {
     }
   };
 
+  const toggleAgentExpansion = (agentId: string) => {
+    setExpandedAgents(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(agentId)) {
+        newSet.delete(agentId);
+      } else {
+        newSet.add(agentId);
+      }
+      return newSet;
+    });
+  };
+
+  const processAIMatching = async () => {
+    setLoading(prev => ({ ...prev, aiMatching: true }));
+    try {
+      const response = await fetch('/api/processes/match-candidates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to process AI matching');
+      }
+
+      const data = await response.json();
+      
+      // Transform the API response to match our component structure
+      const transformedMatches = data.matches.flatMap((match: { candidate: { id: string; name: string; email: string; tech_stack?: string[] }; matching_interviews: { jd_interviews: { interview_name: string; agent_id: string; id: string }; compatibility_score: number; match_analysis: string }[] }) => 
+        match.matching_interviews.map((interview: { jd_interviews: { interview_name: string; agent_id: string; id: string }; compatibility_score: number; match_analysis: string }) => ({
+          id: `${match.candidate.id}-${interview.jd_interviews.id}`,
+          candidate: {
+            name: match.candidate.name,
+            email: match.candidate.email,
+            tech_stack: match.candidate.tech_stack || []
+          },
+          jd_interview: {
+            interview_name: interview.jd_interviews.interview_name,
+            agent_id: interview.jd_interviews.agent_id,
+            id: interview.jd_interviews.id
+          },
+          match_score: interview.compatibility_score,
+          match_analysis: interview.match_analysis
+        }))
+      );
+      
+      setAiMatches(transformedMatches);
+      setShowAiMatches(true);
+      setToast({ 
+        message: `${data.message}. Encontrados ${transformedMatches.length} matches potenciales.`, 
+        type: 'success' 
+      });
+    } catch (error) {
+      console.error('Error processing AI matching:', error);
+      setToast({ message: 'Failed to process AI matching', type: 'error' });
+    } finally {
+      setLoading(prev => ({ ...prev, aiMatching: false }));
+    }
+  };
+
+  const createCombinedAgent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(prev => ({ ...prev, createAgent: true }));
+    try {
+      // Step 1: Create agent in Eleven Labs
+      const elevenLabsData: BodyCreateAgentV1ConvaiAgentsCreatePost = {
+        name: elevenLabsForm.name,
+        conversationConfig: {
+          agent: {
+            firstMessage: elevenLabsForm.firstMessage,
+            prompt: {
+              prompt: elevenLabsForm.prompt,
+              llm: "gemini-2.5-flash"
+            },
+            language: "es",
+          },
+          tts: { 
+            modelId: "eleven_flash_v2_5",
+            voiceId: "bN1bDXgDIGX5lw0rtY2B", // Melanie voice ID
+          }
+        }
+      };
+
+      const elevenlabs = new ElevenLabsClient({
+        apiKey: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY
+      });
+      const elevenLabsAgent = await elevenlabs.conversationalAi.agents.create(elevenLabsData);
+
+      // Step 2: Create agent in our local API using the Eleven Labs agent ID
+      const localAgentData = {
+        agent_id: elevenLabsAgent.agentId,
+        name: elevenLabsForm.name,
+        tech_stack: agentForm.tech_stack,
+        description: elevenLabsForm.prompt, // Use the prompt as description
+        status: agentForm.status
+      };
+
+      const response = await fetch('/api/agents', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localAgentData),
+      });
+
+      if (response.ok) {
+        const newAgent = await response.json();
+        setAgents(prev => [newAgent, ...prev]);
+        
+        // Reset forms
+        setElevenLabsForm({ name: '', prompt: '', firstMessage: '', additionalConfig: '' });
+        setAgentForm({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' });
+        
+        setToast({ 
+          message: `Reclutor IA "${elevenLabsData.name}" creado exitosamente en Eleven Labs y registrado localmente!`, 
+          type: 'success' 
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create local agent');
+      }
+    } catch (error) {
+      console.error('Error creating combined agent:', error);
+      setToast({ 
+        message: error instanceof Error ? error.message : 'Error al crear reclutor IA', 
+        type: 'error' 
+      });
+    } finally {
+      setLoading(prev => ({ ...prev, createAgent: false }));
+    }
+  };
+
   return (
     <DashboardLayout activeTab={activeTab} onTabChange={setActiveTab}>
       <div>
 
 
         {activeTab === 'candidates' && (
-          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
-            <div className="card p-6 h-full flex flex-col">
+          <div className="animate-in space-y-6" style={{ height: 'calc(100vh - 160px)' }}>
+            {/* Main Candidate Creation Section */}
+            <div className="card p-6">
               <div className="flex items-center gap-2 mb-6">
                 <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-bold">+</span>
@@ -810,19 +988,6 @@ export default function Home() {
                     </p>
                   </div>
 
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2 flex items-center gap-2">
-                      <RiRobotLine className="w-4 h-4" />
-                      {t('candidates.aiProcessingFeatures')}
-                    </h4>
-                    <ul className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                      <li>• {t('candidates.autoNameExtraction')}</li>
-                      <li>• {t('candidates.techStackIdentification')}</li>
-                      <li>• {t('candidates.experienceAnalysis')}</li>
-                      <li>• {t('candidates.skillsMapping')}</li>
-                    </ul>
-                  </div>
-
                   <Button 
                     type="submit" 
                     disabled={loading.createCandidate || loading.processingCV || !cvOnlyForm.cv_file}
@@ -836,22 +1001,25 @@ export default function Home() {
                     ) : loading.processingCV ? (
                       <div className="flex items-center gap-2">
                         <div className="loading-spinner"></div>
-                        Processing...
+                        {t('candidates.processing')}
                       </div>
                     ) : (
-                      <span className="flex items-center gap-1"><RiUploadLine className="w-4 h-4" /> Upload CV</span>
+                      <span className="flex items-center gap-1"><RiUploadLine className="w-4 h-4" /> {t('candidates.uploadCV')}</span>
                     )}
                   </Button>
                 </form>
               )}
             </div>
             
-            <div className="card p-6 h-full flex flex-col">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
-                  <RiTeamLine className="text-white text-sm" />
+            {/* Secondary Candidates List Section */}
+            <div className="card p-4">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
+                    <RiTeamLine className="text-white text-xs" />
+                  </div>
+                  <h3 className="text-lg font-semibold">{t('candidates.candidatesList')} ({candidates.length})</h3>
                 </div>
-                <h2 className="text-xl font-semibold">{t('candidates.candidatesList')} ({candidates.length})</h2>
                 {loading.processingCV && (
                   <div className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400">
                     <div className="loading-spinner w-4 h-4"></div>
@@ -859,75 +1027,70 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
+              
+              <div className="max-h-64 overflow-y-auto space-y-2">
                 {loading.candidates ? (
-                  <div className="text-center py-8">
+                  <div className="text-center py-4">
                     <div className="loading-spinner mx-auto mb-2"></div>
-                    <p className="text-muted-foreground">Loading candidates...</p>
+                    <p className="text-muted-foreground text-sm">Loading candidates...</p>
                   </div>
                 ) : candidates.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <div className="text-4xl mb-2"><RiClipboardLine /></div>
-                    <p>{t('candidates.noCandidates')}</p>
+                  <div className="text-center py-4 text-muted-foreground">
+                    <div className="text-2xl mb-2"><RiClipboardLine /></div>
+                    <p className="text-sm">{t('candidates.noCandidates')}</p>
                   </div>
                 ) : (
                   candidates.map((candidate, index) => (
-                    <div key={candidate.id} className="group p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01]" style={{animationDelay: `${index * 0.1}s`}}>
+                    <div key={candidate.id} className="group p-3 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01]" style={{animationDelay: `${index * 0.05}s`}}>
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold">
+                        <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
                           {candidate.name.charAt(0).toUpperCase()}
                         </div>
-                        <div className="flex-1">
+                        <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <h4 className="font-medium text-slate-800 dark:text-slate-200 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                               {candidate.name.startsWith('CV-') ? t('candidates.processing') : candidate.name}
-                            </h3>
+                            </h4>
                             {candidate.name.startsWith('CV-') && (
-                              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs rounded-full flex items-center gap-1">
+                              <span className="px-2 py-1 bg-orange-100 dark:bg-orange-900 text-orange-800 dark:text-orange-200 text-xs rounded-full flex items-center gap-1 flex-shrink-0">
                                 <RiRobotLine className="w-3 h-3" />
-                                {t('candidates.aiProcessing')}
+                                AI
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                            <RiMailLine className="w-4 h-4" /> 
+                          <p className="text-xs text-slate-600 dark:text-slate-400 flex items-center gap-1 truncate">
+                            <RiMailLine className="w-3 h-3 flex-shrink-0" /> 
                             {candidate.email.includes('@ai-extraction.temp') ? t('candidates.emailPendingExtraction') : candidate.email}
                           </p>
-                          {candidate.phone && (
-                            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiPhoneLine className="w-4 h-4" /> {candidate.phone}</p>
-                          )}
-                          {candidate.cv_url && (
-                            <p className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                              <RiClipboardLine className="w-4 h-4" /> 
-                              <a 
-                                href={candidate.cv_url} 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                {t('candidates.viewCV')}
-                              </a>
-                            </p>
-                          )}
                           {candidate.tech_stack && candidate.tech_stack.length > 0 && (
-                            <div className="mt-2">
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Tech Stack:</p>
-                              <div className="flex flex-wrap gap-1">
-                                {candidate.tech_stack.slice(0, 3).map((tech, idx) => (
-                                  <span 
-                                    key={idx}
-                                    className="px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded-full"
-                                  >
-                                    {tech}
-                                  </span>
-                                ))}
-                                {candidate.tech_stack.length > 3 && (
-                                  <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
-                                    +{candidate.tech_stack.length - 3} more
-                                  </span>
-                                )}
-                              </div>
+                            <div className="mt-1 flex flex-wrap gap-1">
+                              {candidate.tech_stack.slice(0, 2).map((tech) => (
+                                <span
+                                  key={tech}
+                                  className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded"
+                                >
+                                  {tech}
+                                </span>
+                              ))}
+                              {candidate.tech_stack.length > 2 && (
+                                <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded">
+                                  +{candidate.tech_stack.length - 2}
+                                </span>
+                              )}
                             </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {candidate.cv_url && (
+                            <a 
+                              href={candidate.cv_url} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 p-1"
+                              title={t('candidates.viewCV')}
+                            >
+                              <RiExternalLinkLine className="w-4 h-4" />
+                            </a>
                           )}
                         </div>
                       </div>
@@ -940,191 +1103,439 @@ export default function Home() {
         )}
 
         {activeTab === 'meets' && (
-          <div className="animate-in grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
-            <div className="card p-6 h-full flex flex-col">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center">
-                  <RiCalendarLine className="text-white text-sm" />
-                </div>
-                <h2 className="text-xl font-semibold">{t('interviews.scheduleInterview')}</h2>
-              </div>
-              <form onSubmit={createMeet} className="space-y-6">
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">{t('interviews.selectCandidate')}</label>
-                  <select
-                    value={meetForm.candidate_id}
-                    onChange={(e) => setMeetForm({ ...meetForm, candidate_id: e.target.value })}
-                    className="w-full h-12 p-3 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring"
-                    required
-                  >
-                    <option value="" disabled>{t('interviews.chooseCandidate')}</option>
-                    {candidates.map((candidate) => (
-                      <option key={candidate.id} value={candidate.id}>
-                        <span className="flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {candidate.name} - {candidate.email}</span>
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-2 text-slate-700 dark:text-slate-300">
-                    Select JD Interview *
-                  </label>
-                  <select
-                    value={meetForm.jd_interviews_id}
-                    onChange={(e) => setMeetForm({ ...meetForm, jd_interviews_id: e.target.value })}
-                    className="w-full h-12 p-3 border border-input rounded-md bg-background text-foreground transition-all focus:scale-[1.02] focus:ring-2 focus:ring-ring"
-                    required
-                  >
-                    <option value="" disabled>Choose a JD Interview...</option>
-                    {loading.jdInterviews ? (
-                      <option disabled>Loading interviews...</option>
-                    ) : (
-                      jdInterviews.map((interview) => (
-                        <option key={interview.id} value={interview.id}>
-                          {interview.interview_name} - Agent: {interview.agent_id}
-                        </option>
-                      ))
-                    )}
-                  </select>
-                  {meetForm.jd_interviews_id && (
-                    <p className="text-xs text-slate-500 mt-1">
-                      This interview will be linked to the selected JD template
-                    </p>
-                  )}
-                </div>
-                <Button 
-                  type="submit" 
-                  disabled={loading.createMeet}
-                  className="w-full h-12 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          <div className="flex flex-col" style={{ height: 'calc(100vh - 160px)' }}>
+            {/* Interview Scheduling Tabs */}
+            <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+              {/* Tab Headers */}
+              <div className="flex border-b border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setInterviewSchedulingTab('ai')}
+                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    interviewSchedulingTab === 'ai'
+                      ? 'text-purple-600 dark:text-purple-400 border-b-2 border-purple-600 dark:border-purple-400 bg-purple-50 dark:bg-purple-900/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
                 >
-                  {loading.createMeet ? (
-                    <div className="flex items-center gap-2">
-                      <div className="loading-spinner"></div>
-                      {t('common.loading')}
-                    </div>
-                  ) : (
-                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> {t('interviews.scheduleInterview')}</span>
-                  )}
-                </Button>
-              </form>
-            </div>
-            
-            <div className="card p-6 h-full flex flex-col">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-gradient-to-r from-orange-400 to-red-500 rounded-full flex items-center justify-center">
-                  <RiClipboardLine className="text-white text-sm" />
-                </div>
-                <h2 className="text-xl font-semibold">{t('interviews.scheduledInterviews')} ({meets.length})</h2>
+                  <RiMagicLine className="w-4 h-4" />
+                  {t('interviews.scheduleWithAI')}
+                </button>
+                <button
+                  onClick={() => setInterviewSchedulingTab('manual')}
+                  className={`flex-1 px-6 py-4 text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                    interviewSchedulingTab === 'manual'
+                      ? 'text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <RiCalendarLine className="w-4 h-4" />
+                  {t('interviews.scheduleManual')}
+                </button>
               </div>
-              <div className="space-y-4 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
-                {loading.meets ? (
-                  <div className="text-center py-8">
-                    <div className="loading-spinner mx-auto mb-2"></div>
-                    <p className="text-muted-foreground">Loading interviews...</p>
-                  </div>
-                ) : meets.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <div className="text-4xl mb-2"><RiCalendarLine /></div>
-                    <p>No interviews scheduled yet. Create your first interview!</p>
-                  </div>
-                ) : (
-                  meets.map((meet, index) => (
-                    <div key={meet.id} className="group p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200" style={{animationDelay: `${index * 0.1}s`}}>
-                      <div className="space-y-3">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-2">
-                            <h3 className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                               {t('interviews.interviewWith')} #{meet.id.slice(0, 8)}
-                            </h3>
-                            {meet.candidate && (
-                              <div className="space-y-1 text-sm mb-2">
-                                <p className="text-slate-700 dark:text-slate-300 font-medium flex items-center gap-1"><RiUserLine className="w-4 h-4" /> {meet.candidate.name}</p>
-                                <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiMailLine className="w-4 h-4" /> {meet.candidate.email}</p>
-                                {meet.jd_interviews && (
-                                  <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1">
-                                    <RiClipboardLine className="w-4 h-4" /> 
-                                    JD: {meet.jd_interviews.interview_name} (Agent: {meet.jd_interviews.agent_id})
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                            <div className="space-y-1 text-sm">
-                              <p className="text-slate-600 dark:text-slate-400 flex items-center gap-1"><RiKeyLine className="w-4 h-4" /> Token: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded">{meet.token}</code></p>
-                              <p className="text-slate-600 dark:text-slate-400">
-                                <span className="flex items-center gap-1"><RiBarChartLine className="w-4 h-4" /> Status: <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                  meet.status === 'pending' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' :
-                                  meet.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' :
-                                  'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                }`}>{getStatusText(meet.status)}</span></span>
-                              </p>
-                              <p className="text-slate-600 dark:text-slate-400 flex items-center gap-2">
-                                <span className="flex items-center gap-1"><RiKeyLine className="w-4 h-4" /> Password: <code className="bg-slate-200 dark:bg-slate-600 px-2 py-1 rounded font-mono text-slate-900 dark:text-slate-100 font-bold">
-                                  {meet.password || 'No password available'}
-                                </code></span>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleCopyLink(meet.password || '')}
-                                  className="hover:scale-105 transition-transform p-1 h-6 w-6"
-                                  disabled={!meet.password}
-                                >
-                                  {copySuccess === meet.password ? <RiCheckLine className="w-4 h-4" /> : <RiClipboardLine className="w-4 h-4" />}
-                                </Button>
-                              </p>
+
+              {/* Tab Content */}
+              <div className="p-6">
+                {/* AI Interview Scheduling Tab */}
+                {interviewSchedulingTab === 'ai' && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <RiMagicLine className="w-5 h-5 text-purple-600" />
+                      {t('interviews.scheduleWithAI')}
+                    </h2>
+                    
+                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-6 border border-purple-200 dark:border-purple-700">
+                      <div className="text-center">
+                        <RiMagicLine className="w-12 h-12 mx-auto mb-4 text-purple-600 dark:text-purple-400" />
+                        <h3 className="text-lg font-medium text-slate-900 dark:text-white mb-2">
+                          {t('interviews.aiSchedulingTitle')}
+                        </h3>
+                        <p className="text-slate-600 dark:text-slate-400 mb-6">
+                          {t('interviews.aiSchedulingDescription')}
+                        </p>
+                        
+                        <Button 
+                          onClick={processAIMatching}
+                          disabled={loading.aiMatching}
+                          className="bg-gradient-to-r cursor-pointer from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white px-8 py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {loading.aiMatching ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              Procesando...
                             </div>
-                            <div className="mt-2">
-                              <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">{t('interviews.interviewLink')}:</p>
-                              <a 
-                                href={meet.link} 
-                                target="_blank" 
-                                rel="noopener noreferrer" 
-                                className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm bg-blue-50 dark:bg-blue-900/20 px-2 py-1 rounded transition-colors"
-                              >
-                                <RiLinkM className="w-4 h-4" />
-                                {t('interviews.joinInterview')}
-                                <RiExternalLinkLine className="w-3 h-3" />
-                              </a>
-                            </div>
-                          </div>
-                          <Button 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={() => deleteMeet(meet.id)}
-                            className="hover:scale-105 transition-transform"
-                          >
-                            <RiDeleteBinLine className="w-4 h-4" />
-                          </Button>
-                        </div>
-                        <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-600">
-                          <Button 
-                            variant="secondary" 
-                            size="sm"
-                            onClick={() => handleSendLink(meet)}
-                            disabled={loading.sendEmail}
-                            className="flex-1 hover:scale-[1.02] transition-transform disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            {loading.sendEmail ? (
-                              <div className="flex items-center gap-1">
-                                <div className="loading-spinner w-3 h-3"></div>
-                                {t('interviews.sending')}
-                              </div>
-                            ) : (
-                              <span className="flex items-center gap-1"><RiSendPlaneLine className="w-4 h-4" /> {t('interviews.sendLink')}</span>
-                            )}
-                          </Button>
-                          <Button 
-                            variant="outline" 
-                            size="sm"
-                            onClick={() => handleCopyLink(meet.link)}
-                            className="hover:scale-[1.02] transition-transform"
-                          >
-                            {copySuccess === meet.link ? <span className="flex items-center gap-1"><RiCheckLine className="w-4 h-4" /> {t('interviews.copied')}</span> : <span className="flex items-center gap-1"><RiClipboardLine className="w-4 h-4" /> {t('interviews.copy')}</span>}
-                          </Button>
-                        </div>
+                          ) : (
+                            <>
+                              <RiMagicLine className="w-4 h-4 mr-2" />
+                              Procesar con IA
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
-                  ))
+                  </div>
+                )}
+
+                {/* Manual Interview Scheduling Tab */}
+                {interviewSchedulingTab === 'manual' && (
+                  <div>
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+                      <RiCalendarLine className="w-5 h-5 text-blue-600" />
+                      {t('interviews.scheduleManual')}
+                    </h2>
+                    
+                    <form onSubmit={createMeet} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          {t('interviews.selectCandidate')}
+                        </label>
+                        <select
+                          value={meetForm.candidate_id}
+                          onChange={(e) => setMeetForm({...meetForm, candidate_id: e.target.value})}
+                          required
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                        >
+                          <option value="">{t('interviews.chooseCandidate')}</option>
+                          {candidates.map(candidate => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.name} ({candidate.email})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                          {t('interviews.selectJdInterview')} *
+                        </label>
+                        <select
+                          value={meetForm.jd_interviews_id}
+                          onChange={(e) => setMeetForm({...meetForm, jd_interviews_id: e.target.value})}
+                          required
+                          className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-slate-700 dark:text-white"
+                        >
+                          <option value="" disabled>{t('interviews.chooseJdInterview')}</option>
+                          {jdInterviews.map(jd => (
+                            <option key={jd.id} value={jd.id}>
+                              {jd.interview_name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <Button 
+                          type="submit" 
+                          disabled={loading.createMeet}
+                          className="w-full h-12 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transform hover:scale-[1.02] transition-all"
+                        >
+                          {loading.createMeet ? (
+                            <div className="flex items-center gap-2">
+                              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              {t('common.loading')}
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <RiCalendarEventLine className="w-4 h-4" />
+                              {t('interviews.scheduleInterview')}
+                            </div>
+                          )}
+                        </Button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* AI Matches Table */}
+            {showAiMatches && aiMatches.length > 0 && (
+              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+                <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                      <RiMagicLine className="w-5 h-5 text-purple-600" />
+                      Matches de IA ({aiMatches.length})
+                    </h2>
+                    <Button
+                      onClick={() => setShowAiMatches(false)}
+                      variant="outline"
+                      size="sm"
+                      className="text-slate-500 hover:text-slate-700"
+                    >
+                      <RiArrowUpSLine className="w-4 h-4 mr-1" />
+                      Ocultar
+                    </Button>
+                  </div>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-50 dark:bg-slate-700">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Candidato
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Entrevista JD
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Score de Match
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Análisis de Match
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Acciones
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                      {aiMatches.map((match) => (
+                        <tr key={match.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div>
+                              <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                {match.candidate.name}
+                              </div>
+                              <div className="text-sm text-slate-500 dark:text-slate-400">
+                                {match.candidate.email}
+                              </div>
+                              {match.candidate.tech_stack && match.candidate.tech_stack.length > 0 && (
+                                <div className="mt-1 flex flex-wrap gap-1">
+                                  {match.candidate.tech_stack.slice(0, 3).map((tech) => (
+                                    <span
+                                      key={tech}
+                                      className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded"
+                                    >
+                                      {tech}
+                                    </span>
+                                  ))}
+                                  {match.candidate.tech_stack.length > 3 && (
+                                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded">
+                                      +{match.candidate.tech_stack.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-sm text-slate-900 dark:text-white">
+                              {match.jd_interview.interview_name}
+                            </div>
+                            <div className="text-sm text-slate-500 dark:text-slate-400">
+                              Agent: {match.jd_interview.agent_id}
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center">
+                              <div className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
+                                match.match_score >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                match.match_score >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                match.match_score >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                              }`}>
+                                {match.match_score}%
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm text-slate-900 dark:text-white">
+                              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+                                {match.match_analysis}
+                              </p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                            <div className="flex items-center gap-2">
+                              <Button
+                                onClick={async () => {
+                                  // Find the candidate and create the interview directly
+                                  const candidate = candidates.find(c => c.name === match.candidate.name);
+                                  if (!candidate) {
+                                    setToast({
+                                      message: 'Candidato no encontrado',
+                                      type: 'error'
+                                    });
+                                    return;
+                                  }
+
+                                  try {
+                                    // Check if candidate already has an interview
+                                    const hasExistingInterview = await checkExistingInterview(candidate.id);
+                                    
+                                    if (hasExistingInterview) {
+                                      setToast({ 
+                                        message: `Ya existe una entrevista en proceso para ${candidate.name}`, 
+                                        type: 'warning' 
+                                      });
+                                      return;
+                                    }
+
+                                    const meetData = {
+                                      candidate_id: candidate.id,
+                                      jd_interviews_id: match.jd_interview.id
+                                    };
+                                    
+                                    const response = await fetch('/api/meets', {
+                                      method: 'POST',
+                                      headers: { 'Content-Type': 'application/json' },
+                                      body: JSON.stringify(meetData),
+                                    });
+                                    
+                                    if (response.ok) {
+                                      // Remove this match from the AI matches list
+                                      setAiMatches(prev => prev.filter(m => m.id !== match.id));
+                                      
+                                      // Refresh meets list
+                                      fetchMeets();
+                                      
+                                      setToast({ 
+                                        message: `Entrevista programada exitosamente para ${candidate.name} - ${match.jd_interview.interview_name}`, 
+                                        type: 'success' 
+                                      });
+                                    } else {
+                                      const errorData = await response.json();
+                                      throw new Error(errorData.error || 'Failed to schedule interview');
+                                    }
+                                  } catch (error) {
+                                    console.error('Error scheduling interview:', error);
+                                    setToast({ 
+                                      message: 'Error al programar la entrevista', 
+                                      type: 'error' 
+                                    });
+                                  }
+                                }}
+                                className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700"
+                              >
+                                <RiCalendarEventLine className="w-3 h-3 mr-1" />
+                                Programar
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Scheduled Interviews Table */}
+            <div className={`bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${
+              scheduledInterviewsCollapsed ? 'flex-none' : 'flex-1'
+            }`}>
+              <div 
+                className="p-6 border-b border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+                onClick={() => setScheduledInterviewsCollapsed(!scheduledInterviewsCollapsed)}
+              >
+                <div className="flex items-center justify-between">
+                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                    <RiCalendarCheckLine className="w-5 h-5" />
+                    {t('interviews.scheduledInterviews')} ({meets.length})
+                  </h2>
+                  <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 transition-transform duration-200">
+                    {scheduledInterviewsCollapsed ? (
+                      <RiArrowDownSLine className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                    ) : (
+                      <RiArrowUpSLine className="w-5 h-5 text-slate-600 dark:text-slate-400" />
+                    )}
+                  </div>
+                </div>
+              </div>
+              
+              <div className={`transition-all duration-300 ease-in-out ${scheduledInterviewsCollapsed ? 'max-h-0 opacity-0' : 'flex-1 opacity-100'} overflow-hidden`}>
+                {meets.length === 0 ? (
+                  <div className="flex items-center justify-center h-full text-slate-500 dark:text-slate-400 py-12">
+                    <div className="text-center">
+                      <RiCalendarLine className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                      <p>{t('interviews.noScheduledInterviews')}</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto overflow-y-auto h-full">
+                    <table className="w-full">
+                      <thead className="bg-slate-50 dark:bg-slate-700 sticky top-0">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {t('interviews.candidate')}
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {t('interviews.jdInterview')}
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {t('interviews.status.title')}
+                          </th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                            {t('interviews.actions')}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
+                        {meets.map(meet => (
+                          <tr key={meet.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div>
+                                <div className="text-sm font-medium text-slate-900 dark:text-white">
+                                  {meet.candidate?.name || 'Unknown Candidate'}
+                                </div>
+                                <div className="text-sm text-slate-500 dark:text-slate-400">
+                                  {meet.candidate?.email}
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="text-sm text-slate-900 dark:text-white">
+                                {meet.jd_interviews?.interview_name || 'No JD Interview'}
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                                meet.status === 'completed' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                meet.status === 'active' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                meet.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' :
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400'
+                              }`}>
+                                {t(`interviews.status.${meet.status}`)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  onClick={() => handleCopyLink(meet.link)}
+                                  className="px-3 py-1 text-xs bg-blue-600 hover:bg-blue-700"
+                                >
+                                  <RiLinkM className="w-3 h-3 mr-1" />
+                                  {copySuccess === meet.link ? t('interviews.copied') : t('interviews.copy')}
+                                </Button>
+                                
+                                <Button
+                                  onClick={() => handleSendLink(meet)}
+                                  disabled={loading.sendEmail}
+                                  className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700"
+                                >
+                                  <RiMailLine className="w-3 h-3 mr-1" />
+                                  {t('interviews.sendLink')}
+                                </Button>
+                                
+                                <a 
+                                  href={meet.link} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center px-3 py-1 text-xs bg-purple-600 hover:bg-purple-700 text-white rounded transition-colors"
+                                >
+                                  {t('interviews.joinInterview')}
+                                  <RiExternalLinkLine className="w-3 h-3 ml-1" />
+                                </a>
+                              </div>
+                              <div className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                ID: #{meet.id.slice(-8)}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 )}
               </div>
             </div>
@@ -1400,35 +1811,126 @@ export default function Home() {
         )}
 
         {activeTab === 'processes' && (
-          <div className="animate-in max-w-4xl mx-auto">
-            <div className="card p-6">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-indigo-500 rounded-full flex items-center justify-center">
-                  <span className="text-white text-sm">⚙️</span>
+          <div className="animate-in h-full w-full" style={{ height: 'calc(100vh - 160px)' }}>
+            <div className="h-full flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
+              {/* Simple Header */}
+              <div className="flex items-center gap-3 p-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
+                  <RiStarLine className="text-white text-sm" />
                 </div>
-                <h2 className="text-xl font-semibold">{t('processes.aiAnalysisProcess')}</h2>
+                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Proceso de Evaluación y Rankeo</h2>
               </div>
-              <div className="space-y-6">
-                <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                  <h4 className="font-medium text-blue-800 dark:text-blue-300 mb-2">Process Description</h4>
-                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                    {t('processes.processDescription')}
-                  </p>
-                </div>
-                <Button 
-                  onClick={executeAnalysis}
-                  disabled={loading.analyzeProcess}
-                  className="w-full h-12 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading.analyzeProcess ? (
-                    <div className="flex items-center gap-2">
-                      <div className="loading-spinner"></div>
-                      {t('processes.analyzing')}
+              
+              {/* Content Section */}
+              <div className="flex-1 p-6 overflow-y-auto">
+                <div className="max-w-6xl mx-auto">
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    {/* Left Side - Configuration */}
+                    <div className="space-y-6">
+                      {/* Configuration Card */}
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
+                        <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-4">Configuración del Análisis</h4>
+                        
+                        <div className="space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                              Filtrar por JD Interview (Opcional)
+                            </label>
+                            <select
+                              value={selectedJdInterviewForProcess}
+                              onChange={(e) => setSelectedJdInterviewForProcess(e.target.value)}
+                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:text-white"
+                            >
+                              <option value="">Analizar todas las entrevistas</option>
+                              {jdInterviews.map(jd => (
+                                <option key={jd.id} value={jd.id}>
+                                  {jd.interview_name}
+                                </option>
+                              ))}
+                            </select>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                              Si no seleccionas ninguna, se analizarán todas las entrevistas disponibles
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Action Button */}
+                      <div>
+                        <button
+                          onClick={executeAnalysis}
+                          disabled={loading.analyzeProcess}
+                          className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+                        >
+                          {loading.analyzeProcess ? (
+                            <div className="flex items-center justify-center">
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                              Evaluando candidatos...
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center">
+                              <RiStarLine className="mr-2" />
+                              Ejecutar Evaluación y Ranking
+                            </div>
+                          )}
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <span className="flex items-center gap-1"><RiRocketLine className="w-4 h-4" /> {t('processes.executeAnalysis')}</span>
-                  )}
-                </Button>
+                    
+                    {/* Right Side - Features */}
+                    <div>
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-800/20 rounded-lg p-6 border border-green-200 dark:border-green-700">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <RiUserLine className="text-white text-xl" />
+                            </div>
+                            <div>
+                              <h5 className="font-semibold text-green-800 dark:text-green-300 mb-2">
+                                Evaluación de Candidatos
+                              </h5>
+                              <p className="text-sm text-green-600 dark:text-green-400">
+                                Análisis profundo de competencias y habilidades técnicas
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-800/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <RiBarChartLine className="text-white text-xl" />
+                            </div>
+                            <div>
+                              <h5 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">
+                                Ranking Automático
+                              </h5>
+                              <p className="text-sm text-blue-600 dark:text-blue-400">
+                                Clasificación inteligente basada en criterios objetivos
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-800/20 rounded-lg p-6 border border-purple-200 dark:border-purple-700">
+                          <div className="flex items-start space-x-4">
+                            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <RiInformationLine className="text-white text-xl" />
+                            </div>
+                            <div>
+                              <h5 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">
+                                Insights Detallados
+                              </h5>
+                              <p className="text-sm text-purple-600 dark:text-purple-400">
+                                Reportes comprehensivos y recomendaciones estratégicas
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1437,36 +1939,24 @@ export default function Home() {
         {activeTab === 'agents' && (
           <div className="animate-in h-full w-full">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
-              {/* Create Agent Form */}
+              {/* Create Agent Form - Combined */}
               <div className="card p-6 h-full flex flex-col">
                 <div className="flex items-center gap-2 mb-6">
-                  <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-pink-500 rounded-full flex items-center justify-center">
-                    <RiRobotLine className="text-white text-sm" />
+                  <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-cyan-500 rounded-full flex items-center justify-center">
+                    <RiMagicLine className="text-white text-sm" />
                   </div>
-                  <h2 className="text-xl font-semibold">{t('agents.createNewAgent')}</h2>
+                  <h2 className="text-xl font-semibold">{t('agents.createAgent')}</h2>
                 </div>
-                <form onSubmit={createAgent} className="space-y-6 flex-1">
+                <form onSubmit={createCombinedAgent} className="space-y-6 flex-1">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.agentID')} *
+                      {t('agents.recruiterName')} *
                     </label>
                     <Input
                       type="text"
-                      value={agentForm.agent_id}
-                      onChange={(e) => setAgentForm({ ...agentForm, agent_id: e.target.value })}
-                      placeholder={t('agents.agentID')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.agentName')} *
-                    </label>
-                    <Input
-                      type="text"
-                      value={agentForm.name}
-                      onChange={(e) => setAgentForm({ ...agentForm, name: e.target.value })}
-                      placeholder={t('agents.agentName')}
+                      value={elevenLabsForm.name}
+                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, name: e.target.value })}
+                      placeholder={t('agents.recruiterNamePlaceholder')}
                       required
                     />
                   </div>
@@ -1484,14 +1974,28 @@ export default function Home() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.description')}
+                      {t('agents.firstMessage')} *
                     </label>
                     <textarea
                       className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
                       rows={3}
-                      value={agentForm.description}
-                      onChange={(e) => setAgentForm({ ...agentForm, description: e.target.value })}
-                      placeholder={t('agents.description')}
+                      value={elevenLabsForm.firstMessage}
+                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, firstMessage: e.target.value })}
+                      placeholder={t('agents.firstMessagePlaceholder')}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                      {t('agents.systemPrompt')} *
+                    </label>
+                    <textarea
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
+                      rows={4}
+                      value={elevenLabsForm.prompt}
+                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, prompt: e.target.value })}
+                      placeholder={t('agents.systemPromptPlaceholder')}
+                      required
                     />
                   </div>
                   <div>
@@ -1510,15 +2014,15 @@ export default function Home() {
                   <Button 
                     type="submit" 
                     disabled={loading.createAgent}
-                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {loading.createAgent ? (
                       <div className="flex items-center gap-2">
                         <div className="loading-spinner"></div>
-                        {t('agents.creating')}
+                        {t('agents.creatingRecruiter')}
                       </div>
                     ) : (
-                      <span className="flex items-center gap-1"><RiStarLine className="w-4 h-4" /> {t('agents.createAgent')}</span>
+                      <span className="flex items-center gap-1"><RiMagicLine className="w-4 h-4" /> {t('agents.createAgent')}</span>
                     )}
                   </Button>
                 </form>
@@ -1544,45 +2048,68 @@ export default function Home() {
                       <p>{t('agents.noAgents')}</p>
                     </div>
                   ) : (
-                    agents.map((agent, index) => (
-                      <div key={agent.id} className="group p-4 bg-gradient-to-r from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01]" style={{animationDelay: `${index * 0.1}s`}}>
-                        <div className="flex items-start justify-between">
-                          <div className="flex-1">
-                            <div className="flex items-center gap-2 mb-2">
-                              <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                                {agent.name}
-                              </h3>
-                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                agent.status === 'active' 
-                                  ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                  : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                              }`}>
-                                {agent.status === 'active' ? t('agents.active') : t('agents.inactive')}
-                              </span>
-                            </div>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                              <strong>ID:</strong> {agent.agent_id}
-                            </p>
-                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
-                              <strong>Tech Stack:</strong> {agent.tech_stack}
-                            </p>
-                            {agent.description && (
-                              <p className="text-sm text-slate-500 dark:text-slate-500 mt-2">
-                                {agent.description}
-                              </p>
-                            )}
-                          </div>
-                          <Button 
-                            variant="destructive" 
-                            size="sm"
-                            onClick={() => deleteAgent(agent.id)}
-                            className="hover:scale-105 transition-transform ml-2"
+                    agents.map((agent, index) => {
+                      const isExpanded = expandedAgents.has(agent.id);
+                      return (
+                        <div key={agent.id} className="group bg-gradient-to-r from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 overflow-hidden" style={{animationDelay: `${index * 0.1}s`}}>
+                          {/* Header - Always visible */}
+                          <div 
+                            className="p-4 cursor-pointer hover:bg-purple-100 dark:hover:bg-slate-700/50 transition-colors"
+                            onClick={() => toggleAgentExpansion(agent.id)}
                           >
-                            <RiDeleteBinLine className="w-4 h-4" />
-                          </Button>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                  {agent.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                                      {agent.name}
+                                    </h3>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                      agent.status === 'active' 
+                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
+                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
+                                    }`}>
+                                      {agent.status === 'active' ? t('agents.active') : t('agents.inactive')}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    <strong>ID:</strong> {agent.agent_id}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 transition-transform duration-200">
+                                {isExpanded ? (
+                                  <RiArrowUpSLine className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                                ) : (
+                                  <RiArrowDownSLine className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Collapsible Content */}
+                          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
+                            <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700 pt-3 space-y-3">
+                              <div>
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tech Stack:</p>
+                                <p className="text-sm text-slate-600 dark:text-slate-400">{agent.tech_stack}</p>
+                              </div>
+                              {agent.description && (
+                                <div>
+                                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Descripción:</p>
+                                  <div className="text-sm text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-800 rounded p-2 max-h-24 overflow-y-auto">
+                                    {agent.description}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>

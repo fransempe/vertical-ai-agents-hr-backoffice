@@ -5,7 +5,6 @@ import {
   RiUserLine, 
   RiCalendarLine, 
   RiChat3Line, 
-  RiUploadLine, 
   RiSettings3Line,
   RiRobotLine,
   RiBarChartLine
@@ -40,28 +39,28 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       description: t('interviews.scheduleInterview').replace('Schedule ', ''),
     },
     {
+      id: 'agents' as const,
+      label: t('navigation.agents'),
+      icon: RiRobotLine,
+      description: t('agents.manageAIAgents').replace('Manage ', ''),
+    },
+    {
       id: 'conversations' as const,
       label: t('navigation.conversations'),
       icon: RiChat3Line,
       description: t('conversations.candidatesWithConversations').replace('Candidates with ', ''),
     },
-    {
-      id: 'bulk-upload' as const,
-      label: t('navigation.bulkUpload'),
-      icon: RiUploadLine,
-      description: t('bulkUpload.bulkUploadCandidates').replace('Bulk Upload ', ''),
-    },
+    // {
+    //   id: 'bulk-upload' as const,
+    //   label: t('navigation.bulkUpload'),
+    //   icon: RiUploadLine,
+    //   description: t('bulkUpload.bulkUploadCandidates').replace('Bulk Upload ', ''),
+    // },
     {
       id: 'processes' as const,
       label: t('navigation.processes'),
       icon: RiSettings3Line,
       description: t('processes.aiAnalysisProcess').replace(' Process', ''),
-    },
-    {
-      id: 'agents' as const,
-      label: t('navigation.agents'),
-      icon: RiRobotLine,
-      description: t('agents.manageAIAgents').replace('Manage ', ''),
     },
   ];
 

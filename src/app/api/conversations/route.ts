@@ -74,6 +74,22 @@ export async function POST(request: NextRequest) {
       conversation_data,
     });
 
+    // Trigger evaluation in background (fire and forget)
+    // Call the evaluate-meet endpoint without waiting for response
+    console.log('Triggering meet evaluation in background...');
+    fetch(`${process.env.MULTIAGENT_PROJECT_URL}/evaluate-meet`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ meet_id }),
+    }).then((response) => {
+      console.log('Meet evaluation triggered successfully:', response);
+    }).catch((error) => {
+      // Log error but don't block the response
+      console.error('Error triggering meet evaluation (background):', error);
+    });
+
     return NextResponse.json(conversation, { status: 201, headers: corsHeaders });
   } catch (error) {
     console.error('Error creating conversation:', error);
