@@ -29,7 +29,8 @@ import {
   RiMagicLine,
   RiCalendarEventLine,
   RiCalendarCheckLine,
-  RiInformationLine
+  RiFileChartLine,
+  RiCloseLine,
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
@@ -37,7 +38,7 @@ import { BodyCreateAgentV1ConvaiAgentsCreatePost } from '@elevenlabs/elevenlabs-
 
 export default function Home() {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports'>('reports');
+  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports'>('reports');
   
   // Available technologies for multi-select
   const availableTechnologies = [
@@ -67,7 +68,6 @@ export default function Home() {
   }>>([]);
   const [showAiMatches, setShowAiMatches] = useState(false);
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
-  const [selectedJdInterviewForProcess, setSelectedJdInterviewForProcess] = useState<string>('');
   const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '', scheduled_at: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null, tech_stack: [] as string[] });
   const [cvOnlyForm, setCvOnlyForm] = useState({ cv_file: null as File | null });
@@ -75,9 +75,45 @@ export default function Home() {
   const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
   const [elevenLabsForm, setElevenLabsForm] = useState({ name: '', prompt: '', firstMessage: '', additionalConfig: '' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, analyzeProcess: false, createAgent: false, uploadCV: false, processingCV: false, aiMatching: false, createElevenLabsAgent: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, createAgent: false, uploadCV: false, processingCV: false, aiMatching: false, createElevenLabsAgent: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+  const [selectedMeetForReport, setSelectedMeetForReport] = useState<Meet | null>(null);
+  const [evaluationData, setEvaluationData] = useState<{
+    conversation_analysis?: {
+      soft_skills?: Record<string, string>;
+      technical_assessment?: {
+        knowledge_level?: string;
+        practical_experience?: string;
+        completeness_summary?: {
+          total_questions?: number;
+          fully_answered?: number;
+          partially_answered?: number;
+          not_answered?: number;
+        };
+        alerts?: string[];
+        technical_questions?: Array<{
+          question: string;
+          answer: string;
+          answered: string;
+          evaluation: string;
+        }>;
+      };
+    };
+    match_evaluation?: {
+      compatibility_score?: number;
+      final_recommendation?: string;
+      justification?: string;
+      strengths?: string[];
+      concerns?: string[];
+      technical_match?: {
+        exact_matches?: string[];
+        partial_matches?: string[];
+        critical_gaps?: string[];
+      };
+    };
+  } | null>(null);
+  const [loadingEvaluation, setLoadingEvaluation] = useState(false);
 
   useEffect(() => {
     fetchCandidates();
@@ -362,7 +398,12 @@ export default function Home() {
         fetchMeets();
         setToast({ message: 'Interview scheduled successfully!', type: 'success' });
       } else {
-        throw new Error('Failed to create meet');
+        const errorData = await response.json();
+        if (response.status === 409) {
+          setToast({ message: errorData.error || 'Ya existe una entrevista programada para este candidato en esta búsqueda.', type: 'error' });
+        } else {
+          throw new Error(errorData.error || 'Failed to create meet');
+        }
       }
     } catch (error) {
       console.error('Error creating meet:', error);
@@ -454,8 +495,8 @@ export default function Home() {
 
       const emailData = {
         to_email: candidate.email,
-        subject: `Your Interview Link - ${candidate.name}`,
-        body: `Hi ${candidate.name},\n\nYour interview has been scheduled. Please use the following link to join:\n\n${meet.link}\n\nPassword: ${meet.password}\n\nBest regards,\nHR Team`
+        subject: `Enlace a tu entrevista - ${candidate.name}`,
+        body: `Hola ${candidate.name},\n\nTu entrevista ha sido programada. Por favor utiliza el siguiente enlace para unirte:\n\n${meet.link}\n\nContraseña: ${meet.password}\n\nSaludos cordiales,\nEquipo de RRHH`
       };
 
       const response = await fetch('/api/send-email', {
@@ -491,9 +532,9 @@ export default function Home() {
     );
   };
 
-  const checkExistingInterview = async (candidateId: string) => {
+  const checkExistingInterview = async (candidateId: string, jdInterviewId: string) => {
     try {
-      const response = await fetch(`/api/meets?candidate_id=${candidateId}`);
+      const response = await fetch(`/api/meets?candidate_id=${candidateId}&jd_interview_id=${jdInterviewId}`);
       if (response.ok) {
         const meets = await response.json();
         return meets.length > 0;
@@ -505,50 +546,6 @@ export default function Home() {
     }
   };
 
-  const executeAnalysis = async () => {
-    setLoading(prev => ({ ...prev, analyzeProcess: true }));
-    try {
-      const requestBody = selectedJdInterviewForProcess 
-        ? { jd_interview_id: selectedJdInterviewForProcess }
-        : {};
-        
-      const response = await fetch('/api/processes/analyze', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-      });
-      
-      const result = await response.json();
-      
-      if (response.ok) {
-        const selectedJdName = selectedJdInterviewForProcess 
-          ? jdInterviews.find(jd => jd.id === selectedJdInterviewForProcess)?.interview_name 
-          : null;
-        
-        const message = selectedJdName 
-          ? `Análisis completado para "${selectedJdName}" en ${result.execution_time || 'N/A'}`
-          : `Análisis completado exitosamente en ${result.execution_time || 'N/A'}`;
-          
-        setToast({ 
-          message,
-          type: 'success' 
-        });
-        
-        // Reset the selector after successful analysis
-        setSelectedJdInterviewForProcess('');
-      } else {
-        setToast({ 
-          message: result.error || 'Analysis failed',
-          type: 'error' 
-        });
-      }
-    } catch (error) {
-      console.error('Error executing analysis:', error);
-      setToast({ message: 'Failed to execute analysis', type: 'error' });
-    } finally {
-      setLoading(prev => ({ ...prev, analyzeProcess: false }));
-    }
-  };
 
   const createAgent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -590,6 +587,27 @@ export default function Home() {
     } catch (error) {
       console.error('Error deleting agent:', error);
       setToast({ message: 'Failed to delete agent', type: 'error' });
+    }
+  };
+
+  const fetchEvaluationReport = async (candidateId: string, jdInterviewId: string) => {
+    setLoadingEvaluation(true);
+    setEvaluationData(null);
+    try {
+      const response = await fetch(`/api/meet-evaluations?candidate_id=${candidateId}&jd_interview_id=${jdInterviewId}`);
+      if (response.ok) {
+        const data = await response.json();
+        setEvaluationData(data.evaluation);
+      } else {
+        const errorData = await response.json();
+        console.error('Error fetching evaluation:', errorData);
+        setEvaluationData(null);
+      }
+    } catch (error) {
+      console.error('Error fetching evaluation report:', error);
+      setEvaluationData(null);
+    } finally {
+      setLoadingEvaluation(false);
     }
   };
 
@@ -1361,7 +1379,7 @@ export default function Home() {
 
                                   try {
                                     // Check if candidate already has an interview
-                                    const hasExistingInterview = await checkExistingInterview(candidate.id);
+                                    const hasExistingInterview = await checkExistingInterview(candidate.id, match.jd_interview.id);
                                     
                                     if (hasExistingInterview) {
                                       setToast({ 
@@ -1810,131 +1828,6 @@ export default function Home() {
           </div>
         )}
 
-        {activeTab === 'processes' && (
-          <div className="animate-in h-full w-full" style={{ height: 'calc(100vh - 160px)' }}>
-            <div className="h-full flex flex-col bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden">
-              {/* Simple Header */}
-              <div className="flex items-center gap-3 p-6 border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
-                  <RiStarLine className="text-white text-sm" />
-                </div>
-                <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-200">Proceso de Evaluación y Rankeo</h2>
-              </div>
-              
-              {/* Content Section */}
-              <div className="flex-1 p-6 overflow-y-auto">
-                <div className="max-w-6xl mx-auto">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Left Side - Configuration */}
-                    <div className="space-y-6">
-                      {/* Configuration Card */}
-                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
-                        <h4 className="font-semibold text-slate-800 dark:text-slate-200 mb-4">Configuración del Análisis</h4>
-                        
-                        <div className="space-y-4">
-                          <div>
-                            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                              Filtrar por JD Interview (Opcional)
-                            </label>
-                            <select
-                              value={selectedJdInterviewForProcess}
-                              onChange={(e) => setSelectedJdInterviewForProcess(e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 dark:bg-slate-700 dark:text-white"
-                            >
-                              <option value="">Analizar todas las entrevistas</option>
-                              {jdInterviews.map(jd => (
-                                <option key={jd.id} value={jd.id}>
-                                  {jd.interview_name}
-                                </option>
-                              ))}
-                            </select>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                              Si no seleccionas ninguna, se analizarán todas las entrevistas disponibles
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {/* Action Button */}
-                      <div>
-                        <button
-                          onClick={executeAnalysis}
-                          disabled={loading.analyzeProcess}
-                          className="w-full px-6 py-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold rounded-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
-                        >
-                          {loading.analyzeProcess ? (
-                            <div className="flex items-center justify-center">
-                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                              Evaluando candidatos...
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center">
-                              <RiStarLine className="mr-2" />
-                              Ejecutar Evaluación y Ranking
-                            </div>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                    
-                    {/* Right Side - Features */}
-                    <div>
-                      <div className="space-y-4">
-                        <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-800/20 rounded-lg p-6 border border-green-200 dark:border-green-700">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-emerald-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <RiUserLine className="text-white text-xl" />
-                            </div>
-                            <div>
-                              <h5 className="font-semibold text-green-800 dark:text-green-300 mb-2">
-                                Evaluación de Candidatos
-                              </h5>
-                              <p className="text-sm text-green-600 dark:text-green-400">
-                                Análisis profundo de competencias y habilidades técnicas
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-800/20 rounded-lg p-6 border border-blue-200 dark:border-blue-700">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <RiBarChartLine className="text-white text-xl" />
-                            </div>
-                            <div>
-                              <h5 className="font-semibold text-blue-800 dark:text-blue-300 mb-2">
-                                Ranking Automático
-                              </h5>
-                              <p className="text-sm text-blue-600 dark:text-blue-400">
-                                Clasificación inteligente basada en criterios objetivos
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        
-                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-800/20 rounded-lg p-6 border border-purple-200 dark:border-purple-700">
-                          <div className="flex items-start space-x-4">
-                            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <RiInformationLine className="text-white text-xl" />
-                            </div>
-                            <div>
-                              <h5 className="font-semibold text-purple-800 dark:text-purple-300 mb-2">
-                                Insights Detallados
-                              </h5>
-                              <p className="text-sm text-purple-600 dark:text-purple-400">
-                                Reportes comprehensivos y recomendaciones estratégicas
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {activeTab === 'agents' && (
           <div className="animate-in h-full w-full">
@@ -2286,26 +2179,38 @@ export default function Home() {
                                 <div className="space-y-2 max-h-60 overflow-y-auto">
                                   {group.meets.slice(0, 5).map((meet) => (
                                     <div key={meet.id} className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800 rounded-lg">
-                                      <div className="flex items-center gap-3">
+                                      <div className="flex items-center gap-3 flex-1">
                                         <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-bold">
                                           {meet.candidate?.name?.charAt(0).toUpperCase() || '?'}
                                         </div>
-                                        <div>
-                                          <p className="font-medium text-slate-800 dark:text-slate-200">
+                                        <div className="flex-1">
+                                          <p className="font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2 flex-wrap">
                                             {meet.candidate?.name || 'Unknown Candidate'}
+                                            <span className="text-slate-400">-</span>
+                                            <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(meet.status)}`}>
+                                              {getStatusText(meet.status)}
+                                            </span>
+                                            <span className="text-slate-400">-</span>
+                                            <span className="text-xs text-slate-500 dark:text-slate-400 font-normal">
+                                              {new Date(meet.created_at).toLocaleDateString()}
+                                            </span>
                                           </p>
                                           <p className="text-sm text-slate-600 dark:text-slate-400">
                                             {meet.candidate?.email || 'No email'}
                                           </p>
                                         </div>
                                       </div>
-                                      <div className="text-right">
-                                        <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(meet.status)}`}>
-                                          {getStatusText(meet.status)}
-                                        </span>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                                          {new Date(meet.created_at).toLocaleDateString()}
-                                        </p>
+                                      <div className="flex items-center">
+                                        <button
+                                          onClick={() => {
+                                            setSelectedMeetForReport(meet);
+                                            fetchEvaluationReport(meet.candidate_id, group.jd_interview.id);
+                                          }}
+                                          className="p-2 rounded-lg bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white transition-all duration-200 hover:scale-110 shadow-md hover:shadow-lg"
+                                          title="Ver reporte con IA"
+                                        >
+                                          <RiFileChartLine className="w-5 h-5" />
+                                        </button>
                                       </div>
                                     </div>
                                   ))}
@@ -2347,6 +2252,379 @@ export default function Home() {
             type={toast.type}
             onClose={() => setToast(null)}
           />
+        )}
+
+        {/* Modal de Reporte con IA */}
+        {selectedMeetForReport && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in">
+              {/* Header del Modal */}
+              <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-purple-500 to-blue-500">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center backdrop-blur-sm">
+                    <RiFileChartLine className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Reporte con IA</h2>
+                    <p className="text-sm text-white/80">
+                      {selectedMeetForReport.candidate?.name || 'Candidato desconocido'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setSelectedMeetForReport(null);
+                    setEvaluationData(null);
+                  }}
+                  className="p-2 rounded-lg hover:bg-white/20 transition-colors text-white"
+                  title="Cerrar"
+                >
+                  <RiCloseLine className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Contenido del Modal */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Información del Candidato */}
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
+                    <RiUserLine className="w-5 h-5" />
+                    Información del Candidato
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">Nombre</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {selectedMeetForReport.candidate?.name || 'N/A'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">Email</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {selectedMeetForReport.candidate?.email || 'N/A'}
+                      </p>
+                    </div>
+                    {(() => {
+                      const candidate = candidates.find(c => c.id === selectedMeetForReport.candidate_id);
+                      return candidate?.tech_stack && candidate.tech_stack.length > 0 && (
+                        <div className="md:col-span-2">
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">Stack Tecnológico</p>
+                          <div className="flex flex-wrap gap-2">
+                            {candidate.tech_stack.map((tech: string, idx: number) => (
+                              <span key={idx} className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm">
+                                {tech}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+
+                {/* Información de la Entrevista */}
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
+                    <RiCalendarLine className="w-5 h-5" />
+                    Información de la Entrevista
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">Estado</p>
+                      <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium mt-1 ${getStatusColor(selectedMeetForReport.status)}`}>
+                        {getStatusText(selectedMeetForReport.status)}
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">Fecha de Creación</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {new Date(selectedMeetForReport.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                    {selectedMeetForReport.scheduled_at && (
+                      <div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Fecha Programada</p>
+                        <p className="font-medium text-slate-800 dark:text-slate-200">
+                          {new Date(selectedMeetForReport.scheduled_at).toLocaleString()}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Análisis con IA */}
+                {loadingEvaluation ? (
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+                      <p className="ml-3 text-slate-600 dark:text-slate-400">Cargando análisis...</p>
+                    </div>
+                  </div>
+                ) : evaluationData ? (
+                  <div className="space-y-6">
+                    {/* Match Evaluation */}
+                    {evaluationData.match_evaluation && (
+                      <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-6 border border-green-200 dark:border-green-700">
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                          <RiCheckLine className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          Evaluación de Compatibilidad
+                        </h3>
+                        {evaluationData.match_evaluation.compatibility_score !== undefined && (
+                          <div className="mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                              <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Puntuación de Compatibilidad</span>
+                              <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                {evaluationData.match_evaluation.compatibility_score}%
+                              </span>
+                            </div>
+                            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-3">
+                              <div 
+                                className="bg-gradient-to-r from-green-500 to-emerald-500 h-3 rounded-full transition-all duration-500"
+                                style={{ width: `${evaluationData.match_evaluation.compatibility_score}%` }}
+                              ></div>
+                            </div>
+                          </div>
+                        )}
+                        {evaluationData.match_evaluation.final_recommendation && (
+                          <div className="mb-4">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Recomendación Final: </span>
+                            <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
+                              evaluationData.match_evaluation.final_recommendation === 'Aprobado' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                              evaluationData.match_evaluation.final_recommendation === 'Condicional' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                              'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                            }`}>
+                              {evaluationData.match_evaluation.final_recommendation}
+                            </span>
+                          </div>
+                        )}
+                        {evaluationData.match_evaluation.justification && (
+                          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+                            {evaluationData.match_evaluation.justification}
+                          </p>
+                        )}
+                        {evaluationData.match_evaluation.strengths && evaluationData.match_evaluation.strengths.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Fortalezas</h4>
+                            <ul className="space-y-1">
+                              {evaluationData.match_evaluation.strengths.map((strength: string, idx: number) => (
+                                <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                  <RiCheckLine className="w-4 h-4 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                                  <span>{strength}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {evaluationData.match_evaluation.concerns && evaluationData.match_evaluation.concerns.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">Oportunidades de Mejora</h4>
+                            <ul className="space-y-1">
+                              {evaluationData.match_evaluation.concerns.map((concern: string, idx: number) => (
+                                <li key={idx} className="flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+                                  <RiCalendarCheckLine className="w-4 h-4 text-orange-600 dark:text-orange-400 mt-0.5 flex-shrink-0" />
+                                  <span>{concern}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Technical Assessment */}
+                    {evaluationData.conversation_analysis?.technical_assessment && (
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                          <RiBarChartLine className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          Evaluación Técnica
+                        </h3>
+                        {evaluationData.conversation_analysis.technical_assessment.knowledge_level && (
+                          <div className="mb-4">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Nivel de Conocimiento: </span>
+                            <span className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm font-medium">
+                              {evaluationData.conversation_analysis.technical_assessment.knowledge_level}
+                            </span>
+                          </div>
+                        )}
+                        {evaluationData.conversation_analysis.technical_assessment.practical_experience && (
+                          <div className="mb-4">
+                            <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Experiencia Práctica: </span>
+                            <span className="px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm font-medium">
+                              {evaluationData.conversation_analysis.technical_assessment.practical_experience}
+                            </span>
+                          </div>
+                        )}
+                        {evaluationData.conversation_analysis.technical_assessment.completeness_summary && (
+                          <div className="mb-4 p-4 bg-white dark:bg-slate-800 rounded-lg">
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Resumen de Completitud</h4>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <div className="text-center">
+                                <p className="text-2xl font-bold text-slate-800 dark:text-slate-200">
+                                  {evaluationData.conversation_analysis.technical_assessment.completeness_summary.total_questions || 0}
+                                </p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Total</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                                  {evaluationData.conversation_analysis.technical_assessment.completeness_summary.fully_answered || 0}
+                                </p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Completas</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                                  {evaluationData.conversation_analysis.technical_assessment.completeness_summary.partially_answered || 0}
+                                </p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Parciales</p>
+                              </div>
+                              <div className="text-center">
+                                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                                  {evaluationData.conversation_analysis.technical_assessment.completeness_summary.not_answered || 0}
+                                </p>
+                                <p className="text-xs text-slate-600 dark:text-slate-400">Sin responder</p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        {evaluationData.conversation_analysis.technical_assessment.alerts && evaluationData.conversation_analysis.technical_assessment.alerts.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold text-orange-800 dark:text-orange-300 mb-2">Alertas</h4>
+                            <ul className="space-y-1">
+                              {evaluationData.conversation_analysis.technical_assessment.alerts.map((alert: string, idx: number) => (
+                                <li key={idx} className="flex items-start gap-2 text-sm text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-900/20 p-2 rounded">
+                                  <RiCalendarCheckLine className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                                  <span>{alert}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {evaluationData.conversation_analysis.technical_assessment.technical_questions && evaluationData.conversation_analysis.technical_assessment.technical_questions.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3">Preguntas Técnicas</h4>
+                            <div className="space-y-4">
+                              {evaluationData.conversation_analysis.technical_assessment.technical_questions.map((q, idx: number) => (
+                                <div key={idx} className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                                  <div className="flex items-start justify-between mb-2">
+                                    <p className="font-medium text-slate-800 dark:text-slate-200 text-sm">{q.question}</p>
+                                    <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                      q.answered === 'SÍ' ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300' :
+                                      q.answered === 'PARCIALMENTE' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300' :
+                                      'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                                    }`}>
+                                      {q.answered}
+                                    </span>
+                                  </div>
+                                  {q.answer && (
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2 italic">&ldquo;{q.answer}&rdquo;</p>
+                                  )}
+                                  {q.evaluation && (
+                                    <p className="text-xs text-slate-500 dark:text-slate-500">{q.evaluation}</p>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Soft Skills */}
+                    {evaluationData.conversation_analysis?.soft_skills && (
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-lg p-6 border border-purple-200 dark:border-purple-700">
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                          <RiUserLine className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                          Habilidades Blandas
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {Object.entries(evaluationData.conversation_analysis.soft_skills).map(([skill, description]) => (
+                            <div key={skill} className="bg-white dark:bg-slate-800 rounded-lg p-4 border border-slate-200 dark:border-slate-600">
+                              <h4 className="font-medium text-slate-800 dark:text-slate-200 mb-2 capitalize text-sm">
+                                {skill.replace('_', ' ')}
+                              </h4>
+                              <p className="text-xs text-slate-600 dark:text-slate-400">
+                                {description || 'No hay información disponible'}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Technical Match */}
+                    {evaluationData.match_evaluation?.technical_match && (
+                      <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-6 border border-slate-200 dark:border-slate-600">
+                        <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                          <RiRobotLine className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                          Coincidencias Técnicas
+                        </h3>
+                        {evaluationData.match_evaluation.technical_match.exact_matches && evaluationData.match_evaluation.technical_match.exact_matches.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-2">Coincidencias Exactas</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {evaluationData.match_evaluation.technical_match.exact_matches.map((tech: string, idx: number) => (
+                                <span key={idx} className="px-3 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-full text-sm">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {evaluationData.match_evaluation.technical_match.partial_matches && evaluationData.match_evaluation.technical_match.partial_matches.length > 0 && (
+                          <div className="mb-4">
+                            <h4 className="text-sm font-semibold text-yellow-800 dark:text-yellow-300 mb-2">Coincidencias Parciales</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {evaluationData.match_evaluation.technical_match.partial_matches.map((tech: string, idx: number) => (
+                                <span key={idx} className="px-3 py-1 bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300 rounded-full text-sm">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {evaluationData.match_evaluation.technical_match.critical_gaps && evaluationData.match_evaluation.technical_match.critical_gaps.length > 0 && (
+                          <div>
+                            <h4 className="text-sm font-semibold text-red-800 dark:text-red-300 mb-2">Habilidades Faltantes Críticas</h4>
+                            <div className="flex flex-wrap gap-2">
+                              {evaluationData.match_evaluation.technical_match.critical_gaps.map((tech: string, idx: number) => (
+                                <span key={idx} className="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-sm">
+                                  {tech}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-lg p-4 border border-purple-200 dark:border-purple-700">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-3 flex items-center gap-2">
+                      <RiRobotLine className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+                      Análisis con IA
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      No hay evaluación disponible para este candidato en esta entrevista.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer del Modal */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSelectedMeetForReport(null);
+                    setEvaluationData(null);
+                  }}
+                  className="flex items-center gap-2"
+                >
+                  <RiCloseLine className="w-4 h-4" />
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>

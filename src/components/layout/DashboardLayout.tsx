@@ -7,8 +7,8 @@ import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports') => void;
 }
 
 export function DashboardLayout({ children, activeTab, onTabChange }: DashboardLayoutProps) {
@@ -38,8 +38,6 @@ export function DashboardLayout({ children, activeTab, onTabChange }: DashboardL
         return t('titles.conversations');
       case 'bulk-upload':
         return t('titles.bulkUpload');
-      case 'processes':
-        return t('titles.processes');
       case 'agents':
         return t('titles.agents');
       default:

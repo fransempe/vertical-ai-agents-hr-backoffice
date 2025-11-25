@@ -5,15 +5,14 @@ import {
   RiUserLine, 
   RiCalendarLine, 
   RiChat3Line, 
-  RiSettings3Line,
   RiRobotLine,
   RiBarChartLine
 } from 'react-icons/ri';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface SidebarProps {
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'processes' | 'agents' | 'reports') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports') => void;
 }
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
@@ -56,12 +55,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
     //   icon: RiUploadLine,
     //   description: t('bulkUpload.bulkUploadCandidates').replace('Bulk Upload ', ''),
     // },
-    {
-      id: 'processes' as const,
-      label: t('navigation.processes'),
-      icon: RiSettings3Line,
-      description: t('processes.aiAnalysisProcess').replace(' Process', ''),
-    },
   ];
 
   return (

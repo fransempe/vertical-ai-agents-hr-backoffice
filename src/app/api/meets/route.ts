@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/database';
+import { createClient } from '@supabase/supabase-js';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
     const candidateId = searchParams.get('candidate_id');
+    const jdInterviewId = searchParams.get('jd_interview_id');
 
     if (token) {
       const meet = await db.getMeetByToken(token);
@@ -29,9 +31,9 @@ export async function GET(request: NextRequest) {
     }
 
     // If candidate_id is provided, filter meets by candidate
-    if (candidateId) {
+    if (candidateId && jdInterviewId) {
       const meets = await db.getMeets();
-      const candidateMeets = meets.filter(meet => meet.candidate_id === candidateId);
+      const candidateMeets = meets.filter(meet => meet.candidate_id === candidateId && meet.jd_interviews_id === jdInterviewId);
       return NextResponse.json(candidateMeets, { headers: corsHeaders });
     }
 
@@ -52,9 +54,37 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Candidate ID is required' }, { status: 400, headers: corsHeaders });
     }
 
+    if (!jd_interviews_id) {
+      return NextResponse.json({ error: 'JD Interview ID is required' }, { status: 400, headers: corsHeaders });
+    }
+
     const candidate = await db.getCandidate(candidate_id);
     if (!candidate) {
       return NextResponse.json({ error: 'Candidate not found' }, { status: 404, headers: corsHeaders });
+    }
+
+    // Check if there's already a meet with the same candidate_id and jd_interviews_id
+    // Exclude cancelled meets from the check - query directly from database
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (supabaseUrl && supabaseAnonKey) {
+      const supabase = createClient(supabaseUrl, supabaseAnonKey);
+      const { data: existingMeets, error: checkError } = await supabase
+        .from('meets')
+        .select('id, status')
+        .eq('candidate_id', candidate_id)
+        .eq('jd_interview_id', jd_interviews_id)
+        .neq('status', 'cancelled');
+
+      if (!checkError && existingMeets && existingMeets.length > 0) {
+        return NextResponse.json(
+          { 
+            error: 'Ya existe una entrevista programada para este candidato en esta búsqueda. No se puede duplicar.'
+          },
+          { status: 409, headers: corsHeaders }
+        );
+      }
     }
 
     const meetData: {
