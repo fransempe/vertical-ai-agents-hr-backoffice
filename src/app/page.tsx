@@ -58,7 +58,7 @@ export default function Home() {
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
   const [candidateCreationTab, setCandidateCreationTab] = useState<'manual' | 'cv'>('cv');
   const [interviewSchedulingTab, setInterviewSchedulingTab] = useState<'ai' | 'manual'>('ai');
-  const [scheduledInterviewsCollapsed, setScheduledInterviewsCollapsed] = useState(false);
+  const [scheduledInterviewsCollapsed, setScheduledInterviewsCollapsed] = useState(true);
   const [aiMatches, setAiMatches] = useState<Array<{
     id: string;
     candidate: { name: string; email: string; tech_stack?: string[] };
@@ -1265,178 +1265,190 @@ export default function Home() {
             </div>
 
             {/* AI Matches Table */}
-            {showAiMatches && aiMatches.length > 0 && (
-              <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
-                <div className="p-6 border-b border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                      <RiMagicLine className="w-5 h-5 text-purple-600" />
-                      Matches de IA ({aiMatches.length})
-                    </h2>
-                    <Button
-                      onClick={() => setShowAiMatches(false)}
-                      variant="outline"
-                      size="sm"
-                      className="text-slate-500 hover:text-slate-700"
-                    >
-                      <RiArrowUpSLine className="w-4 h-4 mr-1" />
-                      Ocultar
-                    </Button>
+            {showAiMatches && aiMatches.length > 0 && (() => {
+              // Group matches by candidate
+              const groupedByCandidate = aiMatches.reduce((acc, match) => {
+                const candidateKey = match.candidate.email; // Use email as unique key
+                if (!acc[candidateKey]) {
+                  acc[candidateKey] = {
+                    candidate: match.candidate,
+                    matches: []
+                  };
+                }
+                acc[candidateKey].matches.push(match);
+                return acc;
+              }, {} as Record<string, { candidate: typeof aiMatches[0]['candidate']; matches: typeof aiMatches }>);
+
+              const groupedArray = Object.values(groupedByCandidate);
+              const totalMatches = aiMatches.length;
+
+              return (
+                <div className="bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 mb-6">
+                  <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                    <div className="flex items-center justify-between">
+                      <h2 className="text-xl font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+                        <RiMagicLine className="w-5 h-5 text-purple-600" />
+                        Matches de IA ({totalMatches} matches, {groupedArray.length} candidatos)
+                      </h2>
+                      <Button
+                        onClick={() => setShowAiMatches(false)}
+                        variant="outline"
+                        size="sm"
+                        className="text-slate-500 hover:text-slate-700"
+                      >
+                        <RiArrowUpSLine className="w-4 h-4 mr-1" />
+                        Ocultar
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="bg-slate-50 dark:bg-slate-700">
-                      <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Candidato
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Entrevista JD
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Score de Match
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Análisis de Match
-                        </th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Acciones
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody className="bg-white dark:bg-slate-800 divide-y divide-slate-200 dark:divide-slate-700">
-                      {aiMatches.map((match) => (
-                        <tr key={match.id} className="hover:bg-slate-50 dark:hover:bg-slate-700/50">
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div>
-                              <div className="text-sm font-medium text-slate-900 dark:text-white">
-                                {match.candidate.name}
-                              </div>
-                              <div className="text-sm text-slate-500 dark:text-slate-400">
-                                {match.candidate.email}
-                              </div>
-                              {match.candidate.tech_stack && match.candidate.tech_stack.length > 0 && (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {match.candidate.tech_stack.slice(0, 3).map((tech) => (
-                                    <span
-                                      key={tech}
-                                      className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 text-xs rounded"
-                                    >
-                                      {tech}
-                                    </span>
-                                  ))}
-                                  {match.candidate.tech_stack.length > 3 && (
-                                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded">
-                                      +{match.candidate.tech_stack.length - 3}
-                                    </span>
+                  
+                  <div className="p-6 space-y-6">
+                    {groupedArray.map((group, groupIdx) => {
+                      const candidate = candidates.find(c => c.email === group.candidate.email);
+                      return (
+                        <div key={groupIdx} className="border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                          {/* Candidate Header */}
+                          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 p-4 border-b border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full flex items-center justify-center text-white text-lg font-bold">
+                                  {group.candidate.name.charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
+                                    {group.candidate.name}
+                                  </h3>
+                                  <p className="text-sm text-slate-600 dark:text-slate-400">
+                                    {group.candidate.email}
+                                  </p>
+                                  {group.candidate.tech_stack && group.candidate.tech_stack.length > 0 && (
+                                    <div className="mt-2 flex flex-wrap gap-1">
+                                      {group.candidate.tech_stack.slice(0, 5).map((tech) => (
+                                        <span
+                                          key={tech}
+                                          className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 text-xs rounded-full"
+                                        >
+                                          {tech}
+                                        </span>
+                                      ))}
+                                      {group.candidate.tech_stack.length > 5 && (
+                                        <span className="px-2 py-1 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400 text-xs rounded-full">
+                                          +{group.candidate.tech_stack.length - 5}
+                                        </span>
+                                      )}
+                                    </div>
                                   )}
                                 </div>
-                              )}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm text-slate-900 dark:text-white">
-                              {match.jd_interview.interview_name}
-                            </div>
-                            <div className="text-sm text-slate-500 dark:text-slate-400">
-                              Agent: {match.jd_interview.agent_id}
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                              <div className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
-                                match.match_score >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
-                                match.match_score >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
-                                match.match_score >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
-                                'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
-                              }`}>
-                                {match.match_score}%
+                              </div>
+                              <div className="text-right">
+                                <span className="inline-flex px-3 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300 rounded-full text-sm font-medium">
+                                  {group.matches.length} {group.matches.length === 1 ? 'búsqueda' : 'búsquedas'}
+                                </span>
                               </div>
                             </div>
-                          </td>
-                          <td className="px-6 py-4">
-                            <div className="text-sm text-slate-900 dark:text-white">
-                              <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                                {match.match_analysis}
-                              </p>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                            <div className="flex items-center gap-2">
-                              <Button
-                                onClick={async () => {
-                                  // Find the candidate and create the interview directly
-                                  const candidate = candidates.find(c => c.name === match.candidate.name);
-                                  if (!candidate) {
-                                    setToast({
-                                      message: 'Candidato no encontrado',
-                                      type: 'error'
-                                    });
-                                    return;
-                                  }
+                          </div>
 
-                                  try {
-                                    // Check if candidate already has an interview
-                                    const hasExistingInterview = await checkExistingInterview(candidate.id, match.jd_interview.id);
-                                    
-                                    if (hasExistingInterview) {
-                                      setToast({ 
-                                        message: `Ya existe una entrevista en proceso para ${candidate.name}`, 
-                                        type: 'warning' 
-                                      });
-                                      return;
-                                    }
+                          {/* Matched Searches */}
+                          <div className="divide-y divide-slate-200 dark:divide-slate-700">
+                            {group.matches.map((match) => (
+                              <div key={match.id} className="p-4 hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
+                                <div className="flex items-start justify-between gap-4">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <h4 className="text-base font-semibold text-slate-900 dark:text-white">
+                                        {match.jd_interview.interview_name}
+                                      </h4>
+                                      <div className={`inline-flex px-3 py-1 rounded-full text-sm font-semibold ${
+                                        match.match_score >= 90 ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400' :
+                                        match.match_score >= 80 ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' :
+                                        match.match_score >= 70 ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' :
+                                        'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400'
+                                      }`}>
+                                        {match.match_score}% Match
+                                      </div>
+                                    </div>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-2">
+                                      Agent: <span className="font-mono bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded text-xs">{match.jd_interview.agent_id}</span>
+                                    </p>
+                                    <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
+                                      {match.match_analysis}
+                                    </p>
+                                  </div>
+                                  <div className="flex-shrink-0">
+                                    <Button
+                                      onClick={async () => {
+                                        if (!candidate) {
+                                          setToast({
+                                            message: 'Candidato no encontrado',
+                                            type: 'error'
+                                          });
+                                          return;
+                                        }
 
-                                    const meetData = {
-                                      candidate_id: candidate.id,
-                                      jd_interviews_id: match.jd_interview.id
-                                    };
-                                    
-                                    const response = await fetch('/api/meets', {
-                                      method: 'POST',
-                                      headers: { 'Content-Type': 'application/json' },
-                                      body: JSON.stringify(meetData),
-                                    });
-                                    
-                                    if (response.ok) {
-                                      // Remove this match from the AI matches list
-                                      setAiMatches(prev => prev.filter(m => m.id !== match.id));
-                                      
-                                      // Refresh meets list
-                                      fetchMeets();
-                                      
-                                      setToast({ 
-                                        message: `Entrevista programada exitosamente para ${candidate.name} - ${match.jd_interview.interview_name}`, 
-                                        type: 'success' 
-                                      });
-                                    } else {
-                                      const errorData = await response.json();
-                                      throw new Error(errorData.error || 'Failed to schedule interview');
-                                    }
-                                  } catch (error) {
-                                    console.error('Error scheduling interview:', error);
-                                    setToast({ 
-                                      message: 'Error al programar la entrevista', 
-                                      type: 'error' 
-                                    });
-                                  }
-                                }}
-                                className="px-3 py-1 text-xs bg-green-600 hover:bg-green-700"
-                              >
-                                <RiCalendarEventLine className="w-3 h-3 mr-1" />
-                                Programar
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                                        try {
+                                          // Check if candidate already has an interview
+                                          const hasExistingInterview = await checkExistingInterview(candidate.id, match.jd_interview.id);
+                                          
+                                          if (hasExistingInterview) {
+                                            setToast({ 
+                                              message: `Ya existe una entrevista en proceso para ${candidate.name} en esta búsqueda`, 
+                                              type: 'warning' 
+                                            });
+                                            return;
+                                          }
+
+                                          const meetData = {
+                                            candidate_id: candidate.id,
+                                            jd_interviews_id: match.jd_interview.id
+                                          };
+                                          
+                                          const response = await fetch('/api/meets', {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify(meetData),
+                                          });
+                                          
+                                          if (response.ok) {
+                                            // Remove this match from the AI matches list
+                                            setAiMatches(prev => prev.filter(m => m.id !== match.id));
+                                            
+                                            // Refresh meets list
+                                            fetchMeets();
+                                            
+                                            setToast({ 
+                                              message: `Entrevista programada exitosamente para ${candidate.name} - ${match.jd_interview.interview_name}`, 
+                                              type: 'success' 
+                                            });
+                                          } else {
+                                            const errorData = await response.json();
+                                            throw new Error(errorData.error || 'Failed to schedule interview');
+                                          }
+                                        } catch (error) {
+                                          console.error('Error scheduling interview:', error);
+                                          setToast({ 
+                                            message: error instanceof Error ? error.message : 'Error al programar la entrevista', 
+                                            type: 'error' 
+                                          });
+                                        }
+                                      }}
+                                      size="sm"
+                                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white whitespace-nowrap"
+                                    >
+                                      <RiCalendarLine className="w-4 h-4 mr-1" />
+                                      Programar
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Scheduled Interviews Table */}
             <div className={`bg-white dark:bg-slate-800 rounded-lg shadow-sm border border-slate-200 dark:border-slate-700 flex flex-col transition-all duration-300 ease-in-out ${
