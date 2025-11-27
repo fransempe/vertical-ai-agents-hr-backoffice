@@ -114,6 +114,7 @@ export default function Home() {
     };
   } | null>(null);
   const [loadingEvaluation, setLoadingEvaluation] = useState(false);
+  const [selectedCandidateForDetails, setSelectedCandidateForDetails] = useState<Candidate | null>(null);
 
   useEffect(() => {
     fetchCandidates();
@@ -1059,7 +1060,12 @@ export default function Home() {
                   </div>
                 ) : (
                   candidates.map((candidate, index) => (
-                    <div key={candidate.id} className="group p-3 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01]" style={{animationDelay: `${index * 0.05}s`}}>
+                    <div 
+                      key={candidate.id} 
+                      onClick={() => setSelectedCandidateForDetails(candidate)}
+                      className="group p-3 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 hover:scale-[1.01] cursor-pointer" 
+                      style={{animationDelay: `${index * 0.05}s`}}
+                    >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
                           {candidate.name.charAt(0).toUpperCase()}
@@ -1096,19 +1102,6 @@ export default function Home() {
                                 </span>
                               )}
                             </div>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          {candidate.cv_url && (
-                            <a 
-                              href={candidate.cv_url} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-200 p-1"
-                              title={t('candidates.viewCV')}
-                            >
-                              <RiExternalLinkLine className="w-4 h-4" />
-                            </a>
                           )}
                         </div>
                       </div>
@@ -2629,6 +2622,142 @@ export default function Home() {
                     setSelectedMeetForReport(null);
                     setEvaluationData(null);
                   }}
+                  className="flex items-center gap-2"
+                >
+                  <RiCloseLine className="w-4 h-4" />
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Detalles del Candidato */}
+        {selectedCandidateForDetails && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col animate-in">
+              {/* Header del Modal */}
+              <div className="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700 bg-gradient-to-r from-blue-500 to-purple-500">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center backdrop-blur-sm">
+                    <span className="text-white text-xl font-bold">
+                      {selectedCandidateForDetails.name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-bold text-white">Información del Candidato</h2>
+                    <p className="text-sm text-white/80">{selectedCandidateForDetails.name}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedCandidateForDetails(null)}
+                  className="p-2 rounded-lg hover:bg-white/20 transition-colors text-white"
+                  title="Cerrar"
+                >
+                  <RiCloseLine className="w-6 h-6" />
+                </button>
+              </div>
+
+              {/* Contenido del Modal */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                {/* Información de Contacto */}
+                <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                  <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                    <RiUserLine className="w-5 h-5" />
+                    Información de Contacto
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Nombre</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {selectedCandidateForDetails.name}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Email</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200 break-all">
+                        {selectedCandidateForDetails.email}
+                      </p>
+                    </div>
+                    {selectedCandidateForDetails.phone && (
+                      <div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Teléfono</p>
+                        <p className="font-medium text-slate-800 dark:text-slate-200">
+                          {selectedCandidateForDetails.phone}
+                        </p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">Fecha de Creación</p>
+                      <p className="font-medium text-slate-800 dark:text-slate-200">
+                        {new Date(selectedCandidateForDetails.created_at).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stack Tecnológico */}
+                {selectedCandidateForDetails.tech_stack && selectedCandidateForDetails.tech_stack.length > 0 && (
+                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                      <RiRobotLine className="w-5 h-5" />
+                      Stack Tecnológico
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedCandidateForDetails.tech_stack.map((tech) => (
+                        <span
+                          key={tech}
+                          className="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm"
+                        >
+                          {tech}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Acceso al CV */}
+                {selectedCandidateForDetails.cv_url && (
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/20 rounded-lg p-4 border border-green-200 dark:border-green-700">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-4 flex items-center gap-2">
+                      <RiFileChartLine className="w-5 h-5 text-green-600 dark:text-green-400" />
+                      Curriculum Vitae
+                    </h3>
+                    <div className="flex items-center gap-3">
+                      <a
+                        href={selectedCandidateForDetails.cv_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium"
+                      >
+                        <RiExternalLinkLine className="w-5 h-5" />
+                        Ver CV
+                      </a>
+                      <p className="text-sm text-slate-600 dark:text-slate-400">
+                        Haz clic para abrir el CV en una nueva pestaña
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {!selectedCandidateForDetails.cv_url && (
+                  <div className="bg-slate-50 dark:bg-slate-700/50 rounded-lg p-4">
+                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 mb-2 flex items-center gap-2">
+                      <RiFileChartLine className="w-5 h-5" />
+                      Curriculum Vitae
+                    </h3>
+                    <p className="text-sm text-slate-600 dark:text-slate-400">
+                      No hay CV disponible para este candidato.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Footer del Modal */}
+              <div className="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/50">
+                <Button
+                  variant="outline"
+                  onClick={() => setSelectedCandidateForDetails(null)}
                   className="flex items-center gap-2"
                 >
                   <RiCloseLine className="w-4 h-4" />
