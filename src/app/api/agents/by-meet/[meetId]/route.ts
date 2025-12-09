@@ -53,16 +53,18 @@ export async function GET(
       );
     }
 
-    // 3. Get the agent by agent_id
-    const agent = await db.getAgentByAgentId(jdInterview.agent_id);
-    if (!agent) {
+    if (!jdInterview.agent_id) {
       return NextResponse.json(
-        { error: 'Agent not found' },
+        { error: 'JD interview has no associated agent ID' },
         { status: 404, headers: corsHeaders }
       );
     }
 
-    return NextResponse.json(agent, { headers: corsHeaders });
+    // Return the agent_id directly from jd_interviews table
+    return NextResponse.json(
+      { agent_id: jdInterview.agent_id },
+      { headers: corsHeaders }
+    );
   } catch (error) {
     console.error('Error getting agent by meet ID:', error);
     return NextResponse.json(
