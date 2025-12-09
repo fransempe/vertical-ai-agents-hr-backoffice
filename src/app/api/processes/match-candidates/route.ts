@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +10,7 @@ export async function OPTIONS() {
   return new Response(null, { status: 200, headers: corsHeaders });
 }
 
-export async function POST(request: NextRequest) {
+export async function POST() {
   try {
     const multiagentUrl = process.env.MULTIAGENT_PROJECT_URL;
     

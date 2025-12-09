@@ -1,14 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Toast } from '@/components/ui/toast';
-import { Candidate, Meet, Conversation, Agent, JdInterview } from '@/lib/database/types';
+import { Candidate, Meet, Conversation, JdInterview } from '@/lib/database/types';
 import { 
   RiExternalLinkLine, 
-  RiDeleteBinLine, 
   RiLinkM,
   RiUserLine,
   RiTeamLine,
@@ -34,11 +32,10 @@ import {
 } from 'react-icons/ri';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
-import { BodyCreateAgentV1ConvaiAgentsCreatePost } from '@elevenlabs/elevenlabs-js/api/resources/conversationalAi/resources/agents/client/requests/BodyCreateAgentV1ConvaiAgentsCreatePost';
 
 export default function Home() {
   const { t } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports'>('reports');
+  const [activeTab, setActiveTab] = useState<'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'reports'>('reports');
   
   // Available technologies for multi-select
   const availableTechnologies = [
@@ -51,7 +48,6 @@ export default function Home() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [meets, setMeets] = useState<Meet[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [agents, setAgents] = useState<Agent[]>([]);
   const [jdInterviews, setJdInterviews] = useState<JdInterview[]>([]);
   const [meetsByJdInterviews, setMeetsByJdInterviews] = useState<{ jd_interview: JdInterview; meets: Meet[] }[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
@@ -67,15 +63,12 @@ export default function Home() {
     match_analysis: string;
   }>>([]);
   const [showAiMatches, setShowAiMatches] = useState(false);
-  const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
   const [meetForm, setMeetForm] = useState({ candidate_id: '', jd_interviews_id: '', scheduled_at: '' });
   const [candidateForm, setCandidateForm] = useState({ name: '', email: '', phone: '', cv_file: null as File | null, tech_stack: [] as string[] });
   const [cvOnlyForm, setCvOnlyForm] = useState({ cv_file: null as File | null });
   const [bulkUploadForm, setBulkUploadForm] = useState({ file: null as File | null });
-  const [agentForm, setAgentForm] = useState({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' as 'active' | 'inactive' });
-  const [elevenLabsForm, setElevenLabsForm] = useState({ name: '', prompt: '', firstMessage: '', additionalConfig: '' });
   
-  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, agents: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, createAgent: false, uploadCV: false, processingCV: false, aiMatching: false, createElevenLabsAgent: false });
+  const [loading, setLoading] = useState({ candidates: false, meets: false, conversations: false, jdInterviews: false, meetsByJdInterviews: false, createCandidate: false, createMeet: false, sendEmail: false, bulkUpload: false, uploadCV: false, processingCV: false, aiMatching: false });
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
   const [selectedMeetForReport, setSelectedMeetForReport] = useState<Meet | null>(null);
@@ -120,7 +113,6 @@ export default function Home() {
     fetchCandidates();
     fetchMeets();
     fetchConversations();
-    fetchAgents();
     fetchJdInterviews();
     fetchMeetsByJdInterviews();
   }, []);
@@ -168,21 +160,6 @@ export default function Home() {
       console.error('Error fetching conversations:', error);
     } finally {
       setLoading(prev => ({ ...prev, conversations: false }));
-    }
-  };
-
-  const fetchAgents = async () => {
-    setLoading(prev => ({ ...prev, agents: true }));
-    try {
-      const response = await fetch('/api/agents');
-      if (response.ok) {
-        const data = await response.json();
-        setAgents(data);
-      }
-    } catch (error) {
-      console.error('Error fetching agents:', error);
-    } finally {
-      setLoading(prev => ({ ...prev, agents: false }));
     }
   };
 
@@ -414,21 +391,6 @@ export default function Home() {
     }
   };
 
-
-  const deleteMeet = async (id: string) => {
-    try {
-      const response = await fetch(`/api/meets/${id}`, {
-        method: 'DELETE',
-      });
-      
-      if (response.ok) {
-        fetchMeets();
-      }
-    } catch (error) {
-      console.error('Error deleting meet:', error);
-    }
-  };
-
   const handleCopyLink = async (link: string) => {
     try {
       await navigator.clipboard.writeText(link);
@@ -548,49 +510,6 @@ export default function Home() {
   };
 
 
-  const createAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(prev => ({ ...prev, createAgent: true }));
-    try {
-      const response = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(agentForm),
-      });
-      if (response.ok) {
-        const newAgent = await response.json();
-        setAgents(prev => [newAgent, ...prev]);
-        setAgentForm({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' });
-        setToast({ message: 'Agent created successfully!', type: 'success' });
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create agent');
-      }
-    } catch (error) {
-      console.error('Error creating agent:', error);
-      setToast({ message: error instanceof Error ? error.message : 'Failed to create agent', type: 'error' });
-    } finally {
-      setLoading(prev => ({ ...prev, createAgent: false }));
-    }
-  };
-
-  const deleteAgent = async (id: string) => {
-    try {
-      const response = await fetch(`/api/agents/${id}`, {
-        method: 'DELETE',
-      });
-      if (response.ok) {
-        setAgents(prev => prev.filter(agent => agent.id !== id));
-        setToast({ message: 'Agent deleted successfully!', type: 'success' });
-      } else {
-        throw new Error('Failed to delete agent');
-      }
-    } catch (error) {
-      console.error('Error deleting agent:', error);
-      setToast({ message: 'Failed to delete agent', type: 'error' });
-    }
-  };
-
   const fetchEvaluationReport = async (candidateId: string, jdInterviewId: string) => {
     setLoadingEvaluation(true);
     setEvaluationData(null);
@@ -676,18 +595,6 @@ export default function Home() {
     }
   };
 
-  const toggleAgentExpansion = (agentId: string) => {
-    setExpandedAgents(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(agentId)) {
-        newSet.delete(agentId);
-      } else {
-        newSet.add(agentId);
-      }
-      return newSet;
-    });
-  };
-
   const processAIMatching = async () => {
     setLoading(prev => ({ ...prev, aiMatching: true }));
     try {
@@ -736,76 +643,6 @@ export default function Home() {
       setToast({ message: 'Failed to process AI matching', type: 'error' });
     } finally {
       setLoading(prev => ({ ...prev, aiMatching: false }));
-    }
-  };
-
-  const createCombinedAgent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(prev => ({ ...prev, createAgent: true }));
-    try {
-      // Step 1: Create agent in Eleven Labs
-      const elevenLabsData: BodyCreateAgentV1ConvaiAgentsCreatePost = {
-        name: elevenLabsForm.name,
-        conversationConfig: {
-          agent: {
-            firstMessage: elevenLabsForm.firstMessage,
-            prompt: {
-              prompt: elevenLabsForm.prompt,
-              llm: "gemini-2.5-flash"
-            },
-            language: "es",
-          },
-          tts: { 
-            modelId: "eleven_flash_v2_5",
-            voiceId: "bN1bDXgDIGX5lw0rtY2B", // Melanie voice ID
-          }
-        }
-      };
-
-      const elevenlabs = new ElevenLabsClient({
-        apiKey: process.env.NEXT_PUBLIC_ELEVENLABS_API_KEY
-      });
-      const elevenLabsAgent = await elevenlabs.conversationalAi.agents.create(elevenLabsData);
-
-      // Step 2: Create agent in our local API using the Eleven Labs agent ID
-      const localAgentData = {
-        agent_id: elevenLabsAgent.agentId,
-        name: elevenLabsForm.name,
-        tech_stack: agentForm.tech_stack,
-        description: elevenLabsForm.prompt, // Use the prompt as description
-        status: agentForm.status
-      };
-
-      const response = await fetch('/api/agents', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(localAgentData),
-      });
-
-      if (response.ok) {
-        const newAgent = await response.json();
-        setAgents(prev => [newAgent, ...prev]);
-        
-        // Reset forms
-        setElevenLabsForm({ name: '', prompt: '', firstMessage: '', additionalConfig: '' });
-        setAgentForm({ agent_id: '', name: '', tech_stack: '', description: '', status: 'active' });
-        
-        setToast({ 
-          message: `Reclutor IA "${elevenLabsData.name}" creado exitosamente en Eleven Labs y registrado localmente!`, 
-          type: 'success' 
-        });
-      } else {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create local agent');
-      }
-    } catch (error) {
-      console.error('Error creating combined agent:', error);
-      setToast({ 
-        message: error instanceof Error ? error.message : 'Error al crear reclutor IA', 
-        type: 'error' 
-      });
-    } finally {
-      setLoading(prev => ({ ...prev, createAgent: false }));
     }
   };
 
@@ -1827,188 +1664,6 @@ export default function Home() {
                       <li>{t('bulkUpload.emptyLinesIgnored')}</li>
                     </ul>
                   </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-
-        {activeTab === 'agents' && (
-          <div className="animate-in h-full w-full">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8" style={{ height: 'calc(100vh - 160px)' }}>
-              {/* Create Agent Form - Combined */}
-              <div className="card p-6 h-full flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-8 h-8 bg-gradient-to-r from-purple-400 to-cyan-500 rounded-full flex items-center justify-center">
-                    <RiMagicLine className="text-white text-sm" />
-                  </div>
-                  <h2 className="text-xl font-semibold">{t('agents.createAgent')}</h2>
-                </div>
-                <form onSubmit={createCombinedAgent} className="space-y-6 flex-1">
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.recruiterName')} *
-                    </label>
-                    <Input
-                      type="text"
-                      value={elevenLabsForm.name}
-                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, name: e.target.value })}
-                      placeholder={t('agents.recruiterNamePlaceholder')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.techStack')} *
-                    </label>
-                    <Input
-                      type="text"
-                      value={agentForm.tech_stack}
-                      onChange={(e) => setAgentForm({ ...agentForm, tech_stack: e.target.value })}
-                      placeholder={t('agents.techStack')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.firstMessage')} *
-                    </label>
-                    <textarea
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                      rows={3}
-                      value={elevenLabsForm.firstMessage}
-                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, firstMessage: e.target.value })}
-                      placeholder={t('agents.firstMessagePlaceholder')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.systemPrompt')} *
-                    </label>
-                    <textarea
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                      rows={4}
-                      value={elevenLabsForm.prompt}
-                      onChange={(e) => setElevenLabsForm({ ...elevenLabsForm, prompt: e.target.value })}
-                      placeholder={t('agents.systemPromptPlaceholder')}
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
-                      {t('agents.status')}
-                    </label>
-                    <select
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-slate-700 dark:text-white"
-                      value={agentForm.status}
-                      onChange={(e) => setAgentForm({ ...agentForm, status: e.target.value as 'active' | 'inactive' })}
-                    >
-                      <option value="active">{t('agents.active')}</option>
-                      <option value="inactive">{t('agents.inactive')}</option>
-                    </select>
-                  </div>
-                  <Button 
-                    type="submit" 
-                    disabled={loading.createAgent}
-                    className="w-full h-12 bg-gradient-to-r from-purple-600 to-cyan-600 hover:from-purple-700 hover:to-cyan-700 transform hover:scale-[1.02] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {loading.createAgent ? (
-                      <div className="flex items-center gap-2">
-                        <div className="loading-spinner"></div>
-                        {t('agents.creatingRecruiter')}
-                      </div>
-                    ) : (
-                      <span className="flex items-center gap-1"><RiMagicLine className="w-4 h-4" /> {t('agents.createAgent')}</span>
-                    )}
-                  </Button>
-                </form>
-              </div>
-
-              {/* Agents List */}
-              <div className="card p-6 h-full flex flex-col">
-                <div className="flex items-center gap-2 mb-6">
-                  <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-500 rounded-full flex items-center justify-center">
-                    <RiRobotLine className="text-white text-sm" />
-                  </div>
-                  <h2 className="text-xl font-semibold">{t('agents.agentsList')} ({agents.length})</h2>
-                </div>
-                <div className="space-y-3 overflow-y-auto" style={{ height: 'calc(100vh - 260px)' }}>
-                  {loading.agents ? (
-                    <div className="text-center py-8">
-                      <div className="loading-spinner mx-auto mb-2"></div>
-                      <p className="text-muted-foreground">Loading agents...</p>
-                    </div>
-                  ) : agents.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                      <div className="text-4xl mb-2"><RiRobotLine /></div>
-                      <p>{t('agents.noAgents')}</p>
-                    </div>
-                  ) : (
-                    agents.map((agent, index) => {
-                      const isExpanded = expandedAgents.has(agent.id);
-                      return (
-                        <div key={agent.id} className="group bg-gradient-to-r from-purple-50 to-pink-50 dark:from-slate-800 dark:to-slate-700 rounded-lg border border-slate-200 dark:border-slate-600 hover:shadow-md transition-all duration-200 overflow-hidden" style={{animationDelay: `${index * 0.1}s`}}>
-                          {/* Header - Always visible */}
-                          <div 
-                            className="p-4 cursor-pointer hover:bg-purple-100 dark:hover:bg-slate-700/50 transition-colors"
-                            onClick={() => toggleAgentExpansion(agent.id)}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3 flex-1">
-                                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                                  {agent.name.charAt(0).toUpperCase()}
-                                </div>
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2">
-                                    <h3 className="font-semibold text-slate-800 dark:text-slate-200 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                                      {agent.name}
-                                    </h3>
-                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                      agent.status === 'active' 
-                                        ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
-                                        : 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200'
-                                    }`}>
-                                      {agent.status === 'active' ? t('agents.active') : t('agents.inactive')}
-                                    </span>
-                                  </div>
-                                  <p className="text-sm text-slate-600 dark:text-slate-400">
-                                    <strong>ID:</strong> {agent.agent_id}
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 dark:bg-slate-700 transition-transform duration-200">
-                                {isExpanded ? (
-                                  <RiArrowUpSLine className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                                ) : (
-                                  <RiArrowDownSLine className="w-4 h-4 text-slate-600 dark:text-slate-400" />
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Collapsible Content */}
-                          <div className={`transition-all duration-300 ease-in-out ${isExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0'} overflow-hidden`}>
-                            <div className="px-4 pb-4 border-t border-slate-200 dark:border-slate-700 pt-3 space-y-3">
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Tech Stack:</p>
-                                <p className="text-sm text-slate-600 dark:text-slate-400">{agent.tech_stack}</p>
-                              </div>
-                              {agent.description && (
-                                <div>
-                                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Descripción:</p>
-                                  <div className="text-sm text-slate-500 dark:text-slate-500 bg-slate-50 dark:bg-slate-800 rounded p-2 max-h-24 overflow-y-auto">
-                                    {agent.description}
-                                  </div>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
                 </div>
               </div>
             </div>

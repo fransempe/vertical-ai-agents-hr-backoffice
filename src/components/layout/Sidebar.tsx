@@ -5,14 +5,13 @@ import {
   RiUserLine, 
   RiCalendarLine, 
   RiChat3Line, 
-  RiRobotLine,
   RiBarChartLine
 } from 'react-icons/ri';
 import { useLanguage } from '@/lib/i18n/LanguageContext';
 
 interface SidebarProps {
-  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports';
-  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'agents' | 'reports') => void;
+  activeTab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'reports';
+  onTabChange: (tab: 'candidates' | 'meets' | 'conversations' | 'bulk-upload' | 'reports') => void;
 }
 
 export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
@@ -36,12 +35,6 @@ export function Sidebar({ activeTab, onTabChange }: SidebarProps) {
       label: t('navigation.interviews'),
       icon: RiCalendarLine,
       description: t('interviews.scheduleInterview').replace('Schedule ', ''),
-    },
-    {
-      id: 'agents' as const,
-      label: t('navigation.agents'),
-      icon: RiRobotLine,
-      description: t('agents.manageAIAgents').replace('Manage ', ''),
     },
     {
       id: 'conversations' as const,
