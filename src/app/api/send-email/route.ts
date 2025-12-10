@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    const response = await fetch(`${emailSenderUrl}/send_via_sendgrid_api`, {
+    const response = await fetch(`${emailSenderUrl}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
